@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cabezones Champions - Edición Amigos Definitiva</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0b132b;
+            font-family: 'Press Start 2P', monospace;
+            color: white;
+            user-select: none;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            background: linear-gradient(to bottom, #1c2541 0%, #3a506b 100%);
+            box-shadow: 0 0 30px rgba(72, 202, 228, 0.4);
+            border: 4px solid #48cae4;
+            border-radius: 10px;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .ui-layer {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(11, 19, 43, 0.95);
+            z-index: 10;
+        }
+        .hidden { display: none !important; }
+        
+        .arcade-btn {
+            background: linear-gradient(180deg, #f72585, #b5179e);
+            color: white;
+            padding: 15px 30px;
+            margin: 10px;
+            border: 4px solid #ff99c8;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            cursor: pointer;
+            text-transform: uppercase;
+            text-shadow: 2px 2px 0 #000;
+            box-shadow: 0 6px 0 #7209b7, 0 10px 10px rgba(0,0,0,0.5);
+            transition: all 0.1s;
+        }
+        .arcade-btn:active {
+            transform: translateY(6px);
+            box-shadow: 0 0 0 #7209b7, 0 4px 4px rgba(0,0,0,0.5);
+        }
+        .arcade-btn.blue {
+            background: linear-gradient(180deg, #48cae4, #0077b6);
+            border-color: #caf0f8;
+            box-shadow: 0 6px 0 #023e8a, 0 10px 10px rgba(0,0,0,0.5);
+        }
+        .arcade-btn.blue:active {
+            box-shadow: 0 0 0 #023e8a, 0 4px 4px rgba(0,0,0,0.5);
+        }
+
+        #char-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            width: 95%;
+            max-width: 950px;
+            max-height: 55vh;
+            overflow-y: auto;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 2px solid #48cae4;
+            border-radius: 10px;
+        }
+        .char-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid #fff;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .char-card:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+        .char-color-preview {
+            width: 40px;
+            height: 40px;
+            border-radius: 0;
+            border: 3px solid #fff;
+            margin: 0 auto 10px auto;
+            box-shadow: inset -4px -4px 0 rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .char-name { font-size: 11px; line-height: 1.4; word-wrap: break-word; }
+
+        #hud {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            max-width: 1450px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 0 30px;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .score-panel {
+            background: rgba(0,0,0,0.8);
+            border: 3px solid;
+            border-radius: 10px;
+            padding: 10px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 180px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        .score-num { font-size: 40px; margin-top: 5px; text-shadow: 3px 3px 0 #000; }
+        .player-name { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;}
+        
+        #timer-box {
+            background: rgba(0,0,0,0.8);
+            border: 3px solid #f72585;
+            border-radius: 10px;
+            padding: 15px 25px;
+            font-size: 24px;
+            color: #fff;
+            text-shadow: 2px 2px 0 #f72585;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #1c2541; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb { background: #48cae4; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="hud" class="hidden">
+        <div class="score-panel" style="border-color: #48cae4;">
+            <span id="p1-hud-name" class="player-name text-cyan-300">P1</span>
+            <span id="p1-score" class="score-num text-white">0</span>
+        </div>
+        <div id="timer-box">02:30</div>
+        <div class="score-panel" style="border-color: #f72585;">
+            <span id="p2-hud-name" class="player-name text-pink-400">P2</span>
+            <span id="p2-score" class="score-num text-white">0</span>
+        </div>
+    </div>
+
+    <!-- Canvas de resolución ancha 1600x600 -->
+    <canvas id="gameCanvas" width="1600" height="600"></canvas>
+
+    <div id="ui-menu" class="ui-layer">
+        <h1 class="text-3xl md:text-5xl text-yellow-300 mb-2 text-center" style="text-shadow: 4px 4px 0 #f72585;">CABEZONES CHAMPIONS</h1>
+        <p class="text-sm md:text-base text-cyan-300 mb-10 text-center">EDICIÓN AMIGOS - DEFINITIVA</p>
+        
+        <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-6">
+            <button class="arcade-btn" onclick="startSelection('CPU')">1 VS CPU</button>
+            <button class="arcade-btn blue" onclick="startSelection('PVP')">1 VS 1 LOCAL</button>
+        </div>
+
+        <div class="mt-8 bg-black/60 p-4 border-2 border-gray-600 rounded-lg text-xs text-gray-300 grid grid-cols-2 gap-8 text-center leading-relaxed">
+            <div>
+                <p class="text-cyan-400 mb-2">CONTROLES J1</p>
+                <p>Mover: A / D</p>
+                <p>Saltar: W</p>
+                <p class="text-yellow-300 mt-1">Patear / Cargar Super: ESPACIO</p>
+            </div>
+            <div>
+                <p class="text-pink-400 mb-2">CONTROLES J2</p>
+                <p>Mover: ◄ / ►</p>
+                <p>Saltar: ▲</p>
+                <p class="text-yellow-300 mt-1">Patear / Cargar Super: M</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="ui-select" class="ui-layer hidden">
+        <h2 id="select-title" class="text-2xl md:text-3xl text-cyan-400 mb-6 text-center" style="text-shadow: 2px 2px 0 #000;">ELIGE JUGADOR 1</h2>
+        <div id="char-grid"></div>
+        <button class="arcade-btn mt-6 text-sm py-2 px-6" onclick="goToMenu()">VOLVER</button>
+    </div>
+
+    <div id="ui-gameover" class="ui-layer hidden">
+        <h1 class="text-5xl text-yellow-300 mb-4 text-center" style="text-shadow: 4px 4px 0 #000;">¡FINAL DEL PARTIDO!</h1>
+        <h2 id="winner-text" class="text-3xl text-white mb-6 text-center">GANA JUGADOR 1</h2>
+        <p id="final-score" class="text-2xl text-cyan-300 mb-10">5 - 3</p>
+        <button class="arcade-btn" onclick="goToMenu()">VOLVER AL MENÚ</button>
+    </div>
+</div>
+
+<script>
+    const ROSTER = [
+        { id: 1, name: 'Juan "El Caniche" Prochetto', nickname: 'EL CANICHE', color: '#ff595e', skinColor: '#fcd5ce', hairColor: '#ffffff', style: 'curly', stripeColor: '#ffffff', badge: '🐩' },
+        { id: 2, name: 'Agustín "El Ñandú" Gasparotti', nickname: 'EL ÑANDÚ', color: '#ffca3a', skinColor: '#e8b89e', hairColor: '#3a2e28', style: 'spiky', stripeColor: '#000000', badge: '🦩' },
+        { id: 3, name: 'Bruno "El Dictador" Della Flora', nickname: 'EL DICTADOR', color: '#8ac926', skinColor: '#fcd5ce', hairColor: '#2b211e', style: 'beard', stripeColor: '#ffffff', badge: '🎖️' },
+        { id: 4, name: 'Lolo "El Bobinado" Rivero', nickname: 'EL BOBINADO', color: '#1982c4', skinColor: '#c58c67', hairColor: '#111111', style: 'cap', stripeColor: '#ff0000', badge: '🧢' },
+        { id: 5, name: 'Lauti "Gagá" Gabutti', nickname: 'GAGÁ', color: '#6a4c93', skinColor: '#fcd5ce', hairColor: '#8a624a', style: 'messy', stripeColor: '#ffd166', badge: '🤪' },
+        { id: 6, name: 'Mateo "La Calesita" Donna', nickname: 'LA CALESITA', color: '#f15bb5', skinColor: '#e8b89e', hairColor: '#c08552', style: 'headband', stripeColor: '#00f5d4', badge: '🎠' },
+        { id: 7, name: 'Pedro "El Sexoso" Capella', nickname: 'EL SEXOSO', color: '#00bbf9', skinColor: '#fcd5ce', hairColor: '#000000', style: 'slick', stripeColor: '#ff007f', badge: '🔥' },
+        { id: 8, name: 'Tomás "El Electrónico" Bork', nickname: 'EL ELECTRÓNICO', color: '#00f5d4', skinColor: '#c58c67', hairColor: '#333333', style: 'visor', stripeColor: '#000000', badge: '⚡' },
+        { id: 9, name: 'Bautista "La Babosa" Bessone', nickname: 'LA BABOSA', color: '#fee440', skinColor: '#fcd5ce', hairColor: '#5e4334', style: 'flat', stripeColor: '#7209b7', badge: '🐌' },
+        { id: 10, name: 'Joaquín "El Paja" Franco', nickname: 'EL PAJA', color: '#9b5de5', skinColor: '#e8b89e', hairColor: '#7c5f4d', style: 'messy', stripeColor: '#ffffff', badge: '🦥' },
+        { id: 11, name: 'Facundo "Floresrica" Porta', nickname: 'FLORESRICA', color: '#f1c0e8', skinColor: '#fcd5ce', hairColor: '#2b211e', style: 'flower', stripeColor: '#ff007f', badge: '🌸' },
+        { id: 12, name: 'Pepa "El Matero" Ocampo', nickname: 'EL MATERO', color: '#ff99c8', skinColor: '#e8b89e', hairColor: '#000000', style: 'mate', stripeColor: '#3a5a40', badge: '🧉' },
+        { id: 13, name: 'Vale "Gargamel" Ricca', nickname: 'GARGAMEL', color: '#a3c4f3', skinColor: '#c58c67', hairColor: '#ffffff', style: 'bald', stripeColor: '#1d3557', badge: '🧙' },
+        { id: 14, name: 'Álvaro "Chupetín" López', nickname: 'CHUPETÍN', color: '#cfbaf0', skinColor: '#fcd5ce', hairColor: '#4f3b2f', style: 'lollipop', stripeColor: '#f72585', badge: '🍭' }
+    ];
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const uiMenu = document.getElementById('ui-menu');
+    const uiSelect = document.getElementById('ui-select');
+    const uiGameover = document.getElementById('ui-gameover');
+    const uiHud = document.getElementById('hud');
+
+    const CW = canvas.width;  // 1600
+    const CH = canvas.height; // 600
+    const GROUND_Y = 530;
+
+    const GRAVITY = 0.65;
+    const FRICTION = 0.85; 
+    const AIR_RESISTANCE = 0.99;
+
+    const PLAYER_RADIUS = 38;
+    const FOOT_SIZE = 20;
+    const BASE_JUMP_FORCE = 14;
+    const MOVE_SPEED = 6.5;
+
+    const BALL_RADIUS = 22; 
+    const BALL_BOUNCE = 0.82; 
+
+    const MAX_GOALS = 5;
+    const MATCH_DURATION = 150; // 2 minutos y medio
+
+    const GOAL_W = 130;
+    const GOAL_H = 200;
+    const POST_RADIUS = 10;
+
+    const crowd = [];
+    const crowdColors = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#fff', '#f15bb5', '#00bbf9'];
+    for(let i = 0; i < 320; i++) {
+        crowd.push({
+            x: Math.random() * CW,
+            y: 150 + Math.random() * (GROUND_Y - 350), 
+            color: crowdColors[Math.floor(Math.random() * crowdColors.length)],
+            jumpSpeed: 0.003 + Math.random() * 0.008,
+            size: 6 + Math.random() * 6
+        });
+    }
+
+    let confettiParticles = [];
+    function spawnConfetti() {
+        confettiParticles = [];
+        const colors = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#f15bb5', '#00f5d4', '#ffffff'];
+        for (let i = 0; i < 200; i++) {
+            confettiParticles.push({
+                x: CW / 2 + (Math.random() - 0.5) * 120,
+                y: CH / 2 + (Math.random() - 0.5) * 60,
+                vx: (Math.random() - 0.5) * 18,
+                vy: (Math.random() - 0.7) * 16 - 4,
+                size: 6 + Math.random() * 8,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                rotation: Math.random() * 360,
+                rotSpeed: (Math.random() - 0.5) * 15
+            });
+        }
+    }
+
+    let gameState = 'MENU'; 
+    let currentMode = 'PVP';
+    let selectingPlayer = 1;
+    let p1Choice = null;
+    let p2Choice = null;
+
+    let player1, player2, ball, activePowerup = null, lastBallTouchPlayer = null;
+    let p1Score = 0;
+    let p2Score = 0;
+    let timeRemaining = MATCH_DURATION;
+    let lastTimeFrame = 0;
+    let goalScorerNickname = '';
+
+    const keys = { w: false, a: false, d: false, space: false, up: false, left: false, right: false, m: false };
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'KeyW') keys.w = true;
+        if (e.code === 'KeyA') keys.a = true;
+        if (e.code === 'KeyD') keys.d = true;
+        if (e.code === 'Space') keys.space = true;
+        if (e.code === 'ArrowUp') keys.up = true;
+        if (e.code === 'ArrowLeft') keys.left = true;
+        if (e.code === 'ArrowRight') keys.right = true;
+        if (e.code === 'KeyM') keys.m = true;
+    });
+    window.addEventListener('keyup', (e) => {
+        if (e.code === 'KeyW') keys.w = false;
+        if (e.code === 'KeyA') keys.a = false;
+        if (e.code === 'KeyD') keys.d = false;
+        if (e.code === 'Space') keys.space = false;
+        if (e.code === 'ArrowUp') keys.up = false;
+        if (e.code === 'ArrowLeft') keys.left = false;
+        if (e.code === 'ArrowRight') keys.right = false;
+        if (e.code === 'KeyM') keys.m = false;
+    });
+
+    class PowerupBox {
+        constructor() {
+            this.x = CW / 2;
+            this.y = GROUND_Y - 120;
+            this.size = 38;
+            this.types = ['superJump', 'freeze', 'giantGoal', 'speedBoost', 'heavyBall'];
+            this.type = this.types[0];
+            this.active = false;
+        }
+
+        spawn() {
+            this.x = 250 + Math.random() * (CW - 500);
+            this.y = GROUND_Y - 80 - (Math.random() * 220);
+            this.type = this.types[Math.floor(Math.random() * this.types.length)];
+            this.active = true;
+        }
+
+        draw() {
+            if (!this.active) return;
+            ctx.fillStyle = '#ffb703';
+            ctx.fillRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
+            
+            ctx.fillStyle = '#000';
+            ctx.font = '16px "Press Start 2P"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('?', this.x, this.y);
+        }
+    }
+
+    class Player {
+        constructor(x, y, isP1, data, isCPU) {
+            this.startX = x;
+            this.startY = y;
+            this.x = x;
+            this.y = y;
+            this.vx = 0;
+            this.vy = 0;
+            this.radius = PLAYER_RADIUS;
+            this.isP1 = isP1;
+            this.isCPU = isCPU;
+            this.data = data;
+            
+            this.facing = isP1 ? 1 : -1;
+            this.kickAnimTimer = 0;
+            this.kickCooldown = 0;
+            
+            this.chargeTimer = 0;
+            this.frozen = false;
+            this.jumpForce = BASE_JUMP_FORCE;
+            this.moveSpeed = MOVE_SPEED;
+        }
+
+        resetPos() {
+            this.x = this.startX;
+            this.y = this.startY;
+            this.vx = 0;
+            this.vy = 0;
+            this.kickAnimTimer = 0;
+            this.kickCooldown = 0;
+            this.chargeTimer = 0;
+            this.frozen = false;
+            this.jumpForce = BASE_JUMP_FORCE;
+            this.moveSpeed = MOVE_SPEED;
+        }
+
+        getInputs() {
+            if (this.frozen) return { left: false, right: false, jump: false, kick: false, kickHold: false };
+
+            if (this.isCPU) {
+                let inputs = { left: false, right: false, jump: false, kick: false, kickHold: false };
+                let dx = ball.x - this.x;
+                let dy = ball.y - this.y;
+                let dist = Math.hypot(dx, dy);
+
+                if (dx < -25) inputs.left = true;
+                else if (dx > 25) inputs.right = true;
+
+                if (dy < -40 && dist < 160) inputs.jump = true;
+                if (dist < this.radius + BALL_RADIUS + 80 && ball.y > this.y - 30) {
+                    inputs.kick = true;
+                    inputs.kickHold = Math.random() < 0.65;
+                }
+
+                return inputs;
+            } else {
+                if (this.isP1) {
+                    return { left: keys.a, right: keys.d, jump: keys.w, kick: keys.space, kickHold: keys.space };
+                } else {
+                    return { left: keys.left, right: keys.right, jump: keys.up, kick: keys.m, kickHold: keys.m };
+                }
+            }
+        }
+
+        update() {
+            let inputs = this.getInputs();
+            let moving = false;
+
+            if (!this.frozen) {
+                if (inputs.left) { this.vx -= 1.5; this.facing = -1; moving = true; }
+                if (inputs.right) { this.vx += 1.5; this.facing = 1; moving = true; }
+
+                if (this.vx > this.moveSpeed) this.vx = this.moveSpeed;
+                if (this.vx < -this.moveSpeed) this.vx = -this.moveSpeed;
+                if (!moving) this.vx *= FRICTION;
+
+                this.vy += GRAVITY;
+                let onGround = (this.y + this.radius >= GROUND_Y);
+                
+                if (onGround) {
+                    this.y = GROUND_Y - this.radius;
+                    this.vy = 0;
+                    if (inputs.jump) this.vy = -this.jumpForce;
+                }
+
+                // Super Tiro con carga exigente
+                if (inputs.kickHold) {
+                    if (this.chargeTimer < 350) this.chargeTimer++; 
+                } else if (this.chargeTimer > 0) {
+                    this.executeKick(this.chargeTimer >= 260);
+                    this.chargeTimer = 0;
+                }
+            }
+
+            if (this.kickCooldown > 0) this.kickCooldown--;
+            if (this.kickAnimTimer > 0) this.kickAnimTimer--;
+
+            this.x += this.vx;
+            this.y += this.vy;
+
+            if (this.x - this.radius < 0) { this.x = this.radius; this.vx *= -0.5; }
+            if (this.x + this.radius > CW) { this.x = CW - this.radius; this.vx *= -0.5; }
+            if (this.y - this.radius < 0) { this.y = this.radius; this.vy *= -0.5; }
+        }
+
+        executeKick(isSuper) {
+            this.kickAnimTimer = 15;
+            this.kickCooldown = 25;
+            
+            let dx = ball.x - this.x;
+            let dy = ball.y - this.y;
+            let dist = Math.hypot(dx, dy);
+            let inFront = (this.facing === 1 && dx > -25) || (this.facing === -1 && dx < 25);
+            
+            if (dist < this.radius + BALL_RADIUS + 100 && inFront) {
+                let powerX = isSuper ? 52 : 25;
+                let powerY = isSuper ? -36 : -18;
+                ball.vx = (this.facing * powerX) + (this.vx * 0.5);
+                ball.vy = powerY + (this.vy * 0.2);
+                if (isSuper) ball.isFireball = true;
+                lastBallTouchPlayer = this;
+            }
+        }
+
+        draw() {
+            let r = this.radius;
+            
+            ctx.fillStyle = '#000';
+            ctx.fillRect(this.x - r + 2, this.y - r - 2, r*2 - 4, r*2 + 4);
+            ctx.fillRect(this.x - r - 2, this.y - r + 2, r*2 + 4, r*2 - 4);
+
+            ctx.fillStyle = this.frozen ? '#90e0ef' : (this.data.skinColor || '#fcd5ce');
+            ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*2);
+            ctx.fillRect(this.x - r, this.y - r + 4, r*2, r*2 - 8);
+
+            // Camiseta con franja o diseño distintivo
+            ctx.fillStyle = this.data.color;
+            ctx.fillRect(this.x - r + 6, this.y + 2, r*2 - 12, r*0.9);
+            ctx.fillStyle = this.data.stripeColor || '#ffffff';
+            ctx.fillRect(this.x - 6, this.y + 2, 12, r*0.9);
+
+            ctx.fillStyle = this.data.hairColor || '#000';
+            let style = this.data.style;
+            
+            if (style === 'curly') {
+                ctx.fillRect(this.x - r + 2, this.y - r, r*2 - 4, r*0.8);
+                ctx.fillRect(this.x - r - 4, this.y - r + 4, 8, 12);
+                ctx.fillRect(this.x + r - 4, this.y - r + 4, 8, 12);
+            } else if (style === 'spiky') {
+                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.6);
+                ctx.fillRect(this.x - 10, this.y - r - 8, 8, 12);
+                ctx.fillRect(this.x + 2, this.y - r - 10, 8, 14);
+            } else if (style === 'beard') {
+                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.5);
+                ctx.fillRect(this.x - r + 6, this.y + 4, r*2 - 12, r*0.6);
+            } else if (style === 'cap') {
+                ctx.fillRect(this.x - r + 2, this.y - r, r*2 - 4, r*0.5);
+                ctx.fillRect(this.x + (this.facing === 1 ? 0 : -r), this.y - r + 2, r*0.8, 6);
+            } else if (style === 'visor') {
+                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.6);
+                ctx.fillStyle = '#00f5d4';
+                ctx.fillRect(this.x - r + 6, this.y - 8, r*2 - 12, 6);
+                ctx.fillRect(this.x + (this.facing * 12), this.y - r - 8, 3, 10);
+            } else if (style === 'flower') {
+                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.6);
+                ctx.fillStyle = '#ff007f';
+                ctx.fillRect(this.x + 8, this.y - r - 6, 10, 10);
+            } else if (style === 'mate') {
+                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.6);
+                ctx.fillStyle = '#7f5539';
+                let mateX = this.x + (this.facing === 1 ? r - 4 : -r - 12);
+                ctx.fillRect(mateX, this.y + 8, 12, 14);
+                ctx.fillStyle = '#00ffcc';
+                ctx.fillRect(mateX + 4, this.y + 2, 2, 8);
+            } else {
+                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.6);
+                ctx.fillRect(this.x - r, this.y - r + 4, r*2, r*0.4);
+            }
+
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(this.x + (8 * this.facing), this.y - 8, 10, 10);
+            ctx.fillRect(this.x + (24 * this.facing), this.y - 8, 10, 10);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(this.x + (12 * this.facing), this.y - 4, 4, 4);
+            ctx.fillRect(this.x + (28 * this.facing), this.y - 4, 4, 4);
+            ctx.fillRect(this.x + (14 * this.facing), this.y + 12, 12, 4);
+
+            let footOffsetX = 5 * this.facing;
+            let footOffsetY = r + 5;
+            if (this.kickAnimTimer > 0) {
+                footOffsetX = 35 * this.facing;
+                footOffsetY = r - 10;
+            }
+            ctx.fillStyle = '#000';
+            ctx.fillRect(this.x + footOffsetX - FOOT_SIZE - 2, this.y + footOffsetY - FOOT_SIZE/2 - 2, FOOT_SIZE*2 + 4, FOOT_SIZE + 4);
+            ctx.fillStyle = this.data.color;
+            ctx.fillRect(this.x + footOffsetX - FOOT_SIZE, this.y + footOffsetY - FOOT_SIZE/2, FOOT_SIZE*2, FOOT_SIZE);
+
+            if (this.chargeTimer > 0) {
+                ctx.fillStyle = 'rgba(0,0,0,0.8)';
+                ctx.fillRect(this.x - 35, this.y - r - 24, 70, 9);
+                ctx.fillStyle = this.chargeTimer >= 260 ? '#ff006e' : '#ffb703';
+                ctx.fillRect(this.x - 33, this.y - r - 22, (66 * (this.chargeTimer / 350)), 5);
+            }
+        }
+    }
+
+    class Ball {
+        constructor() {
+            this.radius = BALL_RADIUS;
+            this.isFireball = false;
+            this.resetPos();
+        }
+
+        resetPos() {
+            this.x = CW / 2;
+            this.y = 100;
+            this.vx = 0;
+            this.vy = 0;
+            this.isFireball = false;
+        }
+
+        update() {
+            this.vy += GRAVITY;
+            this.vx *= AIR_RESISTANCE;
+            this.vy *= AIR_RESISTANCE;
+
+            this.x += this.vx;
+            this.y += this.vy;
+
+            if (this.y + this.radius > GROUND_Y) {
+                this.y = GROUND_Y - this.radius;
+                this.vy *= -BALL_BOUNCE;
+                this.vx *= FRICTION;
+            }
+            if (this.x - this.radius < 0) {
+                this.x = this.radius;
+                this.vx *= -BALL_BOUNCE;
+            }
+            if (this.x + this.radius > CW) {
+                this.x = CW - this.radius;
+                this.vx *= -BALL_BOUNCE;
+            }
+            if (this.y - this.radius < 0) {
+                this.y = this.radius;
+                this.vy *= -BALL_BOUNCE;
+            }
+        }
+
+        draw() {
+            let br = this.radius;
+            ctx.save();
+            ctx.translate(this.x, this.y);
+
+            ctx.beginPath();
+            ctx.arc(0, 0, br, 0, Math.PI * 2);
+            ctx.fillStyle = this.isFireball ? '#ff006e' : '#ffffff';
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#000000';
+            ctx.stroke();
+
+            ctx.fillStyle = this.isFireball ? '#ffb703' : '#000000';
+            ctx.beginPath();
+            ctx.arc(0, 0, br * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+    }
+
+    const powerupBox = new PowerupBox();
+    let powerupSpawnTimer = 0;
+
+    function resolvePlayerCollision(p1, p2) {
+        let dx = p2.x - p1.x;
+        let dy = p2.y - p1.y;
+        let dist = Math.hypot(dx, dy);
+        let minDist = p1.radius + p2.radius;
+        
+        if (dist < minDist && dist > 0) {
+            let overlap = minDist - dist;
+            let nx = dx / dist;
+            let ny = dy / dist;
+            p1.x -= nx * (overlap / 2);
+            p1.y -= ny * (overlap / 2);
+            p2.x += nx * (overlap / 2);
+            p2.y += ny * (overlap / 2);
+            let avgVx = (p1.vx + p2.vx) / 2;
+            p1.vx = avgVx;
+            p2.vx = avgVx;
+        }
+    }
+
+    function resolvePlayerBallCollision(p, b) {
+        let dx = b.x - p.x;
+        let dy = b.y - p.y;
+        let dist = Math.hypot(dx, dy);
+        let minDist = p.radius + b.radius;
+        
+        if (dist < minDist) {
+            let overlap = minDist - dist;
+            let nx = dx / dist;
+            let ny = dy / dist;
+            b.x += nx * overlap;
+            b.y += ny * overlap;
+            b.vx = nx * 6.8 + (p.vx * 0.8);
+            b.vy = ny * 6.8 + (p.vy * 0.8);
+            lastBallTouchPlayer = p;
+        }
+    }
+
+    function triggerPowerup(beneficiaryPlayer) {
+        let isP1Beneficiary = (beneficiaryPlayer === player1);
+        
+        if (powerupBox.type === 'superJump') {
+            player1.jumpForce = BASE_JUMP_FORCE;
+            player2.jumpForce = BASE_JUMP_FORCE;
+            beneficiaryPlayer.jumpForce = BASE_JUMP_FORCE * 1.65;
+            activePowerup = { type: 'superJump', target: beneficiaryPlayer, timer: 300 };
+        } else if (powerupBox.type === 'freeze') {
+            let target = isP1Beneficiary ? player2 : player1;
+            player1.frozen = false;
+            player2.frozen = false;
+            target.frozen = true;
+            activePowerup = { type: 'freeze', target: target, timer: 180 };
+        } else if (powerupBox.type === 'giantGoal') {
+            activePowerup = { type: isP1Beneficiary ? 'giantGoalP2' : 'giantGoalP1', timer: 300 };
+        } else if (powerupBox.type === 'speedBoost') {
+            player1.moveSpeed = MOVE_SPEED;
+            player2.moveSpeed = MOVE_SPEED;
+            beneficiaryPlayer.moveSpeed = MOVE_SPEED * 1.6;
+            activePowerup = { type: 'speedBoost', target: beneficiaryPlayer, timer: 300 };
+        } else if (powerupBox.type === 'heavyBall') {
+            ball.radius = BALL_RADIUS * 1.45;
+            activePowerup = { type: 'heavyBall', timer: 240 };
+        }
+    }
+
+    function initRosterUI() {
+        const grid = document.getElementById('char-grid');
+        grid.innerHTML = '';
+        ROSTER.forEach(char => {
+            const div = document.createElement('div');
+            div.className = 'char-card text-white font-bold';
+            div.innerHTML = `
+                <div class="char-color-preview" style="background-color: ${char.color}; border-color: ${char.hairColor};">
+                   <span style="font-size: 16px;">${char.badge}</span>
+                </div>
+                <div class="char-name">${char.name}</div>
+            `;
+            div.onclick = () => selectChar(char);
+            grid.appendChild(div);
+        });
+    }
+
+    function goToMenu() {
+        gameState = 'MENU';
+        uiMenu.classList.remove('hidden');
+        uiSelect.classList.add('hidden');
+        uiGameover.classList.add('hidden');
+        uiHud.classList.add('hidden');
+    }
+
+    function startSelection(mode) {
+        currentMode = mode;
+        uiMenu.classList.add('hidden');
+        uiSelect.classList.remove('hidden');
+        selectingPlayer = 1;
+        p1Choice = null;
+        p2Choice = null;
+        document.getElementById('select-title').textContent = "ELIGE JUGADOR 1";
+        document.getElementById('select-title').className = "text-3xl text-cyan-400 mb-6 text-center";
+        initRosterUI();
+    }
+
+    function selectChar(char) {
+        if (selectingPlayer === 1) {
+            p1Choice = char;
+            if (currentMode === 'CPU') {
+                let available = ROSTER.filter(c => c.id !== p1Choice.id);
+                p2Choice = available[Math.floor(Math.random() * available.length)];
+                initMatch();
+            } else {
+                selectingPlayer = 2;
+                document.getElementById('select-title').textContent = "ELIGE JUGADOR 2";
+                document.getElementById('select-title').className = "text-3xl text-pink-400 mb-6 text-center";
+            }
+        } else {
+            p2Choice = char;
+            initMatch();
+        }
+    }
+
+    function initMatch() {
+        uiSelect.classList.add('hidden');
+        uiHud.classList.remove('hidden');
+        
+        document.getElementById('p1-hud-name').textContent = p1Choice.name.toUpperCase();
+        document.getElementById('p2-hud-name').textContent = p2Choice.name.toUpperCase() + (currentMode==='CPU' ? ' (CPU)' : '');
+        
+        p1Score = 0; p2Score = 0;
+        timeRemaining = MATCH_DURATION;
+        powerupSpawnTimer = 0;
+        activePowerup = null;
+        lastBallTouchPlayer = null;
+        updateScoreUI();
+
+        let isP2CPU = currentMode === 'CPU';
+        player1 = new Player(CW/4, GROUND_Y - PLAYER_RADIUS, true, p1Choice, false);
+        player2 = new Player((CW/4)*3, GROUND_Y - PLAYER_RADIUS, false, p2Choice, isP2CPU);
+        ball = new Ball();
+
+        gameState = 'PLAYING';
+        lastTimeFrame = performance.now();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function registerGoal(scoringTeam) {
+        if (gameState !== 'PLAYING') return;
+        gameState = 'GOAL_PAUSE';
+        
+        if (scoringTeam === 1) {
+            p1Score++;
+        } else {
+            p2Score++;
+        }
+
+        let scorerPlayer = lastBallTouchPlayer || (scoringTeam === 1 ? player1 : player2);
+        goalScorerNickname = scorerPlayer.data.nickname;
+        
+        spawnConfetti();
+        updateScoreUI();
+
+        if (p1Score >= MAX_GOALS || p2Score >= MAX_GOALS) {
+            setTimeout(showGameOver, 2500);
+        } else {
+            setTimeout(() => {
+                if (gameState !== 'GAMEOVER') {
+                    player1.resetPos();
+                    player2.resetPos();
+                    ball.resetPos();
+                    powerupBox.active = false;
+                    gameState = 'PLAYING';
+                }
+            }, 2500);
+        }
+    }
+
+    function updateScoreUI() {
+        document.getElementById('p1-score').textContent = p1Score;
+        document.getElementById('p2-score').textContent = p2Score;
+        let mins = Math.floor(timeRemaining / 60);
+        let secs = timeRemaining % 60;
+        document.getElementById('timer-box').textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function showGameOver() {
+        gameState = 'GAMEOVER';
+        uiHud.classList.add('hidden');
+        uiGameover.classList.remove('hidden');
+        
+        let wName = p1Score > p2Score ? p1Choice.name : p2Choice.name;
+        if (p1Score === p2Score) wName = "EMPATE";
+        
+        document.getElementById('winner-text').textContent = wName === "EMPATE" ? "¡EMPATE!" : `¡CAMPEÓN: ${wName.toUpperCase()}!`;
+        document.getElementById('final-score').textContent = `${p1Score} - ${p2Score}`;
+    }
+
+    function gameLoop(timestamp) {
+        if (gameState === 'MENU' || gameState === 'SELECT') return;
+
+        if (gameState === 'PLAYING') {
+            if (timestamp - lastTimeFrame >= 1000) {
+                timeRemaining--;
+                powerupSpawnTimer++;
+                updateScoreUI();
+                lastTimeFrame = timestamp;
+                if (timeRemaining <= 0) { showGameOver(); return; }
+
+                if (powerupSpawnTimer >= 11 && !powerupBox.active && !activePowerup) {
+                    powerupBox.spawn();
+                    powerupSpawnTimer = 0;
+                }
+            }
+        }
+
+        ctx.clearRect(0, 0, CW, CH);
+        
+        ctx.fillStyle = '#0b132b';
+        ctx.fillRect(0, 0, CW, GROUND_Y);
+        
+        ctx.fillStyle = '#111827';
+        ctx.fillRect(0, 150, CW, GROUND_Y - 150);
+        for(let i = 150; i < GROUND_Y; i += 30) {
+            ctx.fillStyle = (i % 60 === 0) ? '#1f2937' : '#374151';
+            ctx.fillRect(0, i, CW, 15);
+        }
+
+        if (gameState === 'PLAYING' || gameState === 'GOAL_PAUSE') {
+            crowd.forEach(hincha => {
+                let jump = Math.abs(Math.sin(timestamp * hincha.jumpSpeed)) * 12;
+                ctx.fillStyle = hincha.color;
+                ctx.fillRect(hincha.x, hincha.y - jump, hincha.size, hincha.size * 1.5);
+                ctx.fillStyle = '#fcd5ce';
+                ctx.fillRect(hincha.x + hincha.size * 0.1, hincha.y - jump - hincha.size * 0.8, hincha.size * 0.8, hincha.size * 0.8);
+            });
+        }
+        
+        ctx.fillStyle = '#48cae4';
+        ctx.fillRect(0, GROUND_Y - 20, CW, 20);
+
+        for(let i = 0; i < CW; i += 50) {
+            for (let j = GROUND_Y; j < CH; j += 20) {
+                ctx.fillStyle = ((i/50 + j/20) % 2 === 0) ? '#2b9348' : '#007f5f';
+                ctx.fillRect(i, j, 50, 20);
+            }
+        }
+        
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, GROUND_Y, CW, 8);
+        ctx.fillRect(CW/2 - 4, GROUND_Y, 8, CH - GROUND_Y);
+
+        let p1GoalH = GOAL_H;
+        let p2GoalH = GOAL_H;
+        if (activePowerup) {
+            if (activePowerup.type === 'giantGoalP2') p2GoalH = GOAL_H * 1.45;
+            if (activePowerup.type === 'giantGoalP1') p1GoalH = GOAL_H * 1.45;
+        }
+
+        // --- ARCOS Y REDES COMPLETOS EN AMBOS LADOS ---
+        // Arco Izquierdo
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        for(let i = 0; i < GOAL_W; i += 12) {
+            for(let j = 0; j < p1GoalH; j += 12) {
+                if ((i + j) % 24 === 0) ctx.fillRect(i, GROUND_Y - p1GoalH + j, 10, 10);
+            }
+        }
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, GROUND_Y - p1GoalH - POST_RADIUS, GOAL_W, POST_RADIUS * 2);
+
+        // Arco Derecho
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        for(let i = CW - GOAL_W; i < CW; i += 12) {
+            for(let j = 0; j < p2GoalH; j += 12) {
+                if ((i + j) % 24 === 0) ctx.fillRect(i, GROUND_Y - p2GoalH + j, 10, 10);
+            }
+        }
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(CW - GOAL_W, GROUND_Y - p2GoalH - POST_RADIUS, GOAL_W, POST_RADIUS * 2);
+
+        if (gameState === 'PLAYING' || gameState === 'GOAL_PAUSE') {
+            if (gameState === 'PLAYING') {
+                player1.update();
+                player2.update();
+                ball.update();
+
+                resolvePlayerCollision(player1, player2);
+                resolvePlayerBallCollision(player1, ball);
+                resolvePlayerBallCollision(player2, ball);
+
+                // Rebote en los travesaños superiores (postes verticales totalmente abiertos)
+                let topYLeft = GROUND_Y - p1GoalH - POST_RADIUS;
+                if (ball.x > 0 && ball.x < GOAL_W) {
+                    if (Math.abs(ball.y - (topYLeft + POST_RADIUS)) < ball.radius + POST_RADIUS && ball.vy > 0) {
+                        ball.y = topYLeft - ball.radius;
+                        ball.vy *= -BALL_BOUNCE;
+                    }
+                }
+                let topYRight = GROUND_Y - p2GoalH - POST_RADIUS;
+                if (ball.x > CW - GOAL_W && ball.x < CW) {
+                    if (Math.abs(ball.y - (topYRight + POST_RADIUS)) < ball.radius + POST_RADIUS && ball.vy > 0) {
+                        ball.y = topYRight - ball.radius;
+                        ball.vy *= -BALL_BOUNCE;
+                    }
+                }
+
+                if (powerupBox.active) {
+                    powerupBox.draw();
+                    let distP1 = Math.hypot(player1.x - powerupBox.x, player1.y - powerupBox.y);
+                    let distP2 = Math.hypot(player2.x - powerupBox.x, player2.y - powerupBox.y);
+                    let distBall = Math.hypot(ball.x - powerupBox.x, ball.y - powerupBox.y);
+                    let hitPlayer = null;
+
+                    if (distP1 < player1.radius + powerupBox.size/2) hitPlayer = player1;
+                    else if (distP2 < player2.radius + powerupBox.size/2) hitPlayer = player2;
+                    else if (distBall < ball.radius + powerupBox.size/2) {
+                        hitPlayer = lastBallTouchPlayer || player1;
+                    }
+
+                    if (hitPlayer) {
+                        powerupBox.active = false;
+                        triggerPowerup(hitPlayer);
+                    }
+                }
+
+                if (activePowerup) {
+                    activePowerup.timer--;
+                    if (activePowerup.timer <= 0) {
+                        player1.jumpForce = BASE_JUMP_FORCE;
+                        player2.jumpForce = BASE_JUMP_FORCE;
+                        player1.moveSpeed = MOVE_SPEED;
+                        player2.moveSpeed = MOVE_SPEED;
+                        player1.frozen = false;
+                        player2.frozen = false;
+                        ball.radius = BALL_RADIUS;
+                        activePowerup = null;
+                    }
+                }
+
+                // Detección de Goles (Incluyendo goles en contra)
+                if (ball.y > GROUND_Y - Math.max(p1GoalH, p2GoalH) + 15) {
+                    if (ball.x < GOAL_W) {
+                        // Entra en arco izquierdo -> Anota el Jugador 2
+                        registerGoal(2); 
+                    } else if (ball.x > CW - GOAL_W) {
+                        // Entra en arco derecho -> Anota el Jugador 1
+                        registerGoal(1); 
+                    }
+                }
+            }
+
+            player1.draw();
+            player2.draw();
+            ball.draw();
+
+            if (gameState === 'GOAL_PAUSE') {
+                ctx.fillStyle = 'rgba(0,0,0,0.65)';
+                ctx.fillRect(0, 0, CW, CH);
+
+                confettiParticles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.4;
+                    p.rotation += p.rotSpeed;
+                    
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate((p.rotation * Math.PI) / 180);
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size * 0.6);
+                    ctx.restore();
+                });
+
+                ctx.save();
+                ctx.shadowColor = '#ff006e';
+                ctx.shadowBlur = 25;
+                ctx.fillStyle = '#ff006e';
+                ctx.font = '32px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                // Formato de texto exacto requerido: "GOLAZO DE [APODO]"
+                ctx.fillText(`GOLAZO DE ${goalScorerNickname}`, CW/2, CH/2 - 20);
+                
+                ctx.fillStyle = '#ffb703';
+                ctx.font = '18px "Press Start 2P"';
+                ctx.fillText(`¡IMPARABLE!`, CW/2, CH/2 + 30);
+                ctx.restore();
+            }
+        }
+
+        if (gameState !== 'GAMEOVER') requestAnimationFrame(gameLoop);
+    }
+
+    goToMenu();
+</script>
+</body>
+</html>

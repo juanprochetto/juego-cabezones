@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cabezones Tecnica - </title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         body {
@@ -119,7 +119,7 @@
             position: absolute;
             top: 20px;
             width: 100%;
-            max-width: 1450px;
+            max-width: 1850px;
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
@@ -173,7 +173,7 @@
     </div>
 
     <!-- Canvas de resolución ancha 1600x600 -->
-    <canvas id="gameCanvas" width="1600" height="600"></canvas>
+    <canvas id="gameCanvas" width="1900" height="700"></canvas>
 
     <div id="ui-menu" class="ui-layer">
         <h1 class="text-3xl md:text-5xl text-yellow-300 mb-2 text-center" style="text-shadow: 4px 4px 0 #f72585;">CABEZONES CHAMPIONS</h1>
@@ -189,13 +189,13 @@
                 <p class="text-cyan-400 mb-2">CONTROLES J1</p>
                 <p>Mover: A / D</p>
                 <p>Saltar: W</p>
-                <p class="text-yellow-300 mt-1">Patear / Cargar Super: ESPACIO</p>
+                <p class="text-yellow-300 mt-1">Patear (mantené = SÚPER): ESPACIO</p>
             </div>
             <div>
                 <p class="text-pink-400 mb-2">CONTROLES J2</p>
                 <p>Mover: ◄ / ►</p>
                 <p>Saltar: ▲</p>
-                <p class="text-yellow-300 mt-1">Patear / Cargar Super: M</p>
+                <p class="text-yellow-300 mt-1">Patear (mantené = SÚPER): M</p>
             </div>
         </div>
     </div>
@@ -239,252 +239,152 @@
     const uiGameover = document.getElementById('ui-gameover');
     const uiHud = document.getElementById('hud');
 
-    const CW = canvas.width;  // 1600
-    const CH = canvas.height; // 600
-    const GROUND_Y = 530;
+    const CW = canvas.width, CH = canvas.height, GROUND_Y = 620;
+    const GRAVITY = 0.6, FRICTION = 0.85;
+    const PLAYER_RADIUS = 38, FOOT_SIZE = 20, BASE_JUMP_FORCE = 14.5, MOVE_SPEED = 6.5;
+    const BALL_RADIUS = 22, BALL_BOUNCE = 0.78, MAX_BALL_SPEED = 46;
+    const MAX_GOALS = 5, MATCH_DURATION = 150;
+    const GOAL_W = 150, GOAL_H = 210, POST_RADIUS = 10;
+    const SUPER_CHARGE = 70, MAX_CHARGE = 100, STEP = 1000 / 60;
 
-    const GRAVITY = 0.65;
-    const FRICTION = 0.85; 
-    const AIR_RESISTANCE = 0.99;
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const pick = a => a[Math.floor(Math.random() * a.length)];
+    const de = n => n.startsWith('EL ') ? 'DEL ' + n.slice(3) : 'DE ' + n;
+    const al = n => n.startsWith('EL ') ? 'AL ' + n.slice(3) : 'A ' + n;
 
-    const PLAYER_RADIUS = 38;
-    const FOOT_SIZE = 20;
-    const BASE_JUMP_FORCE = 14;
-    const MOVE_SPEED = 6.5;
-
-    const BALL_RADIUS = 22; 
-    const BALL_BOUNCE = 0.82; 
-
-    const MAX_GOALS = 5;
-    const MATCH_DURATION = 150; // 2 minutos y medio
-
-    const GOAL_W = 130;
-    const GOAL_H = 200;
-    const POST_RADIUS = 10;
+    const SUPERS = [
+        { name: 'FUEGO', ang: 0.18, spd: 40, col: '#ff006e' },
+        { name: 'COHETE', ang: 0.8, spd: 38, col: '#ffb703' },
+        { name: 'CURVA', ang: 0.42, spd: 36, col: '#7209b7', curve: true }
+    ];
+    const PU_TYPES = {
+        superJump: ['SALTO LOCO', 300], freeze: ['CONGELAR', 180], giantGoal: ['ARCO GIGANTE', 300],
+        speedBoost: ['TURBO', 300], bigBall: ['PELOTÓN', 260], moon: ['GRAVEDAD LUNAR', 320]
+    };
 
     const crowd = [];
     const crowdColors = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#fff', '#f15bb5', '#00bbf9'];
-    for(let i = 0; i < 320; i++) {
-        crowd.push({
-            x: Math.random() * CW,
-            y: 150 + Math.random() * (GROUND_Y - 350), 
-            color: crowdColors[Math.floor(Math.random() * crowdColors.length)],
-            jumpSpeed: 0.003 + Math.random() * 0.008,
-            size: 6 + Math.random() * 6
-        });
-    }
+    for (let i = 0; i < 380; i++) crowd.push({ x: Math.random() * CW, y: 160 + Math.random() * (GROUND_Y - 380), color: pick(crowdColors), jumpSpeed: 0.003 + Math.random() * 0.008, size: 6 + Math.random() * 6 });
 
-    let confettiParticles = [];
+    let confetti = [];
     function spawnConfetti() {
-        confettiParticles = [];
-        const colors = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#f15bb5', '#00f5d4', '#ffffff'];
-        for (let i = 0; i < 200; i++) {
-            confettiParticles.push({
-                x: CW / 2 + (Math.random() - 0.5) * 120,
-                y: CH / 2 + (Math.random() - 0.5) * 60,
-                vx: (Math.random() - 0.5) * 18,
-                vy: (Math.random() - 0.7) * 16 - 4,
-                size: 6 + Math.random() * 8,
-                color: colors[Math.floor(Math.random() * colors.length)],
-                rotation: Math.random() * 360,
-                rotSpeed: (Math.random() - 0.5) * 15
-            });
-        }
+        const cols = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#f15bb5', '#00f5d4', '#ffffff'];
+        confetti = Array.from({ length: 200 }, () => ({ x: CW / 2 + rnd(-60, 60), y: CH / 2 + rnd(-30, 30), vx: rnd(-9, 9), vy: rnd(-14, 2) - 4, size: rnd(6, 14), color: pick(cols), rot: rnd(0, 360), rs: rnd(-7, 7) }));
     }
 
-    let gameState = 'MENU'; 
-    let currentMode = 'PVP';
-    let selectingPlayer = 1;
-    let p1Choice = null;
-    let p2Choice = null;
+    let gameState = 'MENU', currentMode = 'PVP', selectingPlayer = 1, p1Choice = null, p2Choice = null;
+    let player1, player2, ball, activePowerup = null, lastTouch = null, prevTouch = null;
+    let p1Score = 0, p2Score = 0, timeRemaining = MATCH_DURATION, tickFrames = 0, suddenDeath = false;
+    let pauseFrames = 0, pendingEnd = false, goalInfo = ['', ''], banner = { text: '', timer: 0, color: '#fff' };
+    let goalH = [GOAL_H, GOAL_H], goalTarget = [GOAL_H, GOAL_H], gravityMul = 1, barCooldown = 0, matchFrames = 0;
+    let boxTimer = 600, lastBoxType = '';
 
-    let player1, player2, ball, activePowerup = null, lastBallTouchPlayer = null;
-    let p1Score = 0;
-    let p2Score = 0;
-    let timeRemaining = MATCH_DURATION;
-    let lastTimeFrame = 0;
-    let goalScorerNickname = '';
+    const keys = {};
+    window.addEventListener('keydown', e => { keys[e.code] = true; if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-    const keys = { w: false, a: false, d: false, space: false, up: false, left: false, right: false, m: false };
+    function announce(text, color = '#ffb703') { banner = { text, timer: 150, color }; }
+    function touch(p) { if (lastTouch !== p) { prevTouch = lastTouch; lastTouch = p; } }
 
-    window.addEventListener('keydown', (e) => {
-        if (e.code === 'KeyW') keys.w = true;
-        if (e.code === 'KeyA') keys.a = true;
-        if (e.code === 'KeyD') keys.d = true;
-        if (e.code === 'Space') keys.space = true;
-        if (e.code === 'ArrowUp') keys.up = true;
-        if (e.code === 'ArrowLeft') keys.left = true;
-        if (e.code === 'ArrowRight') keys.right = true;
-        if (e.code === 'KeyM') keys.m = true;
-    });
-    window.addEventListener('keyup', (e) => {
-        if (e.code === 'KeyW') keys.w = false;
-        if (e.code === 'KeyA') keys.a = false;
-        if (e.code === 'KeyD') keys.d = false;
-        if (e.code === 'Space') keys.space = false;
-        if (e.code === 'ArrowUp') keys.up = false;
-        if (e.code === 'ArrowLeft') keys.left = false;
-        if (e.code === 'ArrowRight') keys.right = false;
-        if (e.code === 'KeyM') keys.m = false;
-    });
+    // Colisión círculo vs travesaño (cápsula). Evita atravesarlo y rebota arriba, abajo y por el borde.
+    function barCollide(o, rest) {
+        let hit = false;
+        for (let s = 0; s < 2; s++) {
+            const by = GROUND_Y - goalH[s];
+            const cx = Math.max(s ? CW - GOAL_W : 0, Math.min(s ? CW : GOAL_W, o.x));
+            let dx = o.x - cx, dy = o.y - by, d = Math.hypot(dx, dy);
+            const min = o.radius + POST_RADIUS;
+            if (d < min) {
+                if (d === 0) { dx = 0; dy = -1; d = 1; }
+                const nx = dx / d, ny = dy / d;
+                o.x += nx * (min - d); o.y += ny * (min - d);
+                const vn = o.vx * nx + o.vy * ny;
+                if (vn < 0) { o.vx -= (1 + rest) * vn * nx; o.vy -= (1 + rest) * vn * ny; }
+                if (o.grounded !== undefined && ny < -0.5) { o.grounded = true; if (o.vy > 0) o.vy = 0; }
+                hit = true;
+            }
+        }
+        return hit;
+    }
 
     class PowerupBox {
-        constructor() {
-            this.x = CW / 2;
-            this.y = GROUND_Y - 120;
-            this.size = 38;
-            this.types = ['superJump', 'freeze', 'giantGoal', 'speedBoost', 'heavyBall'];
-            this.type = this.types[0];
-            this.active = false;
-        }
-
+        constructor() { this.size = 38; this.active = false; this.x = 0; this.y = 0; this.life = 0; this.type = 'superJump'; }
         spawn() {
-            this.x = 250 + Math.random() * (CW - 500);
-            this.y = GROUND_Y - 80 - (Math.random() * 220);
-            this.type = this.types[Math.floor(Math.random() * this.types.length)];
-            this.active = true;
+            this.x = rnd(350, CW - 350); this.y = rnd(GROUND_Y - 300, GROUND_Y - 90);
+            this.type = pick(Object.keys(PU_TYPES).filter(t => t !== lastBoxType)); lastBoxType = this.type;
+            this.life = rnd(480, 840); this.active = true;
         }
-
+        update() { if (--this.life <= 0) this.active = false; }
         draw() {
-            if (!this.active) return;
-            ctx.fillStyle = '#ffb703';
-            ctx.fillRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
-            
-            ctx.fillStyle = '#000';
-            ctx.font = '16px "Press Start 2P"';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('?', this.x, this.y);
+            const y = this.y + Math.sin(matchFrames * 0.08) * 6, s = this.size;
+            ctx.fillStyle = '#ffb703'; ctx.fillRect(this.x - s / 2, y - s / 2, s, s);
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeRect(this.x - s / 2, y - s / 2, s, s);
+            ctx.fillStyle = '#000'; ctx.font = '16px "Press Start 2P"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('?', this.x, y);
         }
     }
 
     class Player {
-        constructor(x, y, isP1, data, isCPU) {
-            this.startX = x;
-            this.startY = y;
-            this.x = x;
-            this.y = y;
-            this.vx = 0;
-            this.vy = 0;
-            this.radius = PLAYER_RADIUS;
-            this.isP1 = isP1;
-            this.isCPU = isCPU;
-            this.data = data;
-            
-            this.facing = isP1 ? 1 : -1;
-            this.kickAnimTimer = 0;
-            this.kickCooldown = 0;
-            
-            this.chargeTimer = 0;
-            this.frozen = false;
-            this.jumpForce = BASE_JUMP_FORCE;
-            this.moveSpeed = MOVE_SPEED;
+        constructor(x, isP1, data, isCPU) {
+            this.startX = x; this.x = x; this.y = GROUND_Y - PLAYER_RADIUS; this.vx = 0; this.vy = 0;
+            this.radius = PLAYER_RADIUS; this.isP1 = isP1; this.isCPU = isCPU; this.data = data;
+            this.facing = isP1 ? 1 : -1; this.kickAnimTimer = 0; this.kickCooldown = 0; this.chargeTimer = 0;
+            this.grounded = true; this.frozen = false; this.jumpForce = BASE_JUMP_FORCE; this.moveSpeed = MOVE_SPEED; this.cpuTarget = 12;
         }
-
         resetPos() {
-            this.x = this.startX;
-            this.y = this.startY;
-            this.vx = 0;
-            this.vy = 0;
-            this.kickAnimTimer = 0;
-            this.kickCooldown = 0;
-            this.chargeTimer = 0;
-            this.frozen = false;
-            this.jumpForce = BASE_JUMP_FORCE;
-            this.moveSpeed = MOVE_SPEED;
+            this.x = this.startX; this.y = GROUND_Y - this.radius; this.vx = this.vy = 0;
+            this.kickAnimTimer = this.kickCooldown = this.chargeTimer = 0; this.facing = this.isP1 ? 1 : -1;
         }
-
+        canReach() {
+            const dx = ball.x - this.x, dy = ball.y - this.y;
+            return Math.hypot(dx, dy) < this.radius + ball.radius + 38 && dx * this.facing > -12;
+        }
         getInputs() {
-            if (this.frozen) return { left: false, right: false, jump: false, kick: false, kickHold: false };
-
-            if (this.isCPU) {
-                let inputs = { left: false, right: false, jump: false, kick: false, kickHold: false };
-                let dx = ball.x - this.x;
-                let dy = ball.y - this.y;
-                let dist = Math.hypot(dx, dy);
-
-                if (dx < -25) inputs.left = true;
-                else if (dx > 25) inputs.right = true;
-
-                if (dy < -40 && dist < 160) inputs.jump = true;
-                if (dist < this.radius + BALL_RADIUS + 80 && ball.y > this.y - 30) {
-                    inputs.kick = true;
-                    inputs.kickHold = Math.random() < 0.65;
-                }
-
-                return inputs;
-            } else {
-                if (this.isP1) {
-                    return { left: keys.a, right: keys.d, jump: keys.w, kick: keys.space, kickHold: keys.space };
-                } else {
-                    return { left: keys.left, right: keys.right, jump: keys.up, kick: keys.m, kickHold: keys.m };
-                }
-            }
+            if (this.frozen) return { left: false, right: false, jump: false, kickHold: false };
+            if (!this.isCPU) return this.isP1
+                ? { left: keys.KeyA, right: keys.KeyD, jump: keys.KeyW, kickHold: keys.Space }
+                : { left: keys.ArrowLeft, right: keys.ArrowRight, jump: keys.ArrowUp, kickHold: keys.KeyM };
+            const i = { left: false, right: false, jump: false, kickHold: false };
+            const atk = this.isP1 ? 1 : -1, dx = (ball.x - atk * 48) - this.x; // se ubica detrás de la pelota
+            if (dx < -14) i.left = true; else if (dx > 14) i.right = true; else this.facing = atk;
+            if (ball.y - this.y < -60 && Math.abs(ball.x - this.x) < 150) i.jump = true;
+            if (this.facing === atk && this.canReach()) i.kickHold = this.chargeTimer < this.cpuTarget;
+            return i;
         }
-
         update() {
-            let inputs = this.getInputs();
-            let moving = false;
-
+            const inp = this.getInputs(); let mv = false;
             if (!this.frozen) {
-                if (inputs.left) { this.vx -= 1.5; this.facing = -1; moving = true; }
-                if (inputs.right) { this.vx += 1.5; this.facing = 1; moving = true; }
-
-                if (this.vx > this.moveSpeed) this.vx = this.moveSpeed;
-                if (this.vx < -this.moveSpeed) this.vx = -this.moveSpeed;
-                if (!moving) this.vx *= FRICTION;
-
-                this.vy += GRAVITY;
-                let onGround = (this.y + this.radius >= GROUND_Y);
-                
-                if (onGround) {
-                    this.y = GROUND_Y - this.radius;
-                    this.vy = 0;
-                    if (inputs.jump) this.vy = -this.jumpForce;
+                if (inp.left) { this.vx -= 1.5; this.facing = -1; mv = true; }
+                if (inp.right) { this.vx += 1.5; this.facing = 1; mv = true; }
+                this.vx = Math.max(-this.moveSpeed, Math.min(this.moveSpeed, this.vx));
+                if (inp.jump && this.grounded) { this.vy = -this.jumpForce; this.grounded = false; }
+                if (inp.kickHold) { if (this.chargeTimer < MAX_CHARGE) this.chargeTimer++; }
+                else if (this.chargeTimer > 0) {
+                    this.executeKick(this.chargeTimer >= SUPER_CHARGE); this.chargeTimer = 0;
+                    this.cpuTarget = Math.random() < 0.18 ? SUPER_CHARGE + 3 : pick([3, 8, 15, 30]);
                 }
-
-                // Super Tiro con carga exigente
-                if (inputs.kickHold) {
-                    if (this.chargeTimer < 350) this.chargeTimer++; 
-                } else if (this.chargeTimer > 0) {
-                    this.executeKick(this.chargeTimer >= 260);
-                    this.chargeTimer = 0;
-                }
-            }
-
+            } else this.chargeTimer = 0;
+            if (!mv) this.vx *= FRICTION;
+            this.vy += GRAVITY * gravityMul; this.x += this.vx; this.y += this.vy; this.grounded = false;
+            if (this.y + this.radius >= GROUND_Y) { this.y = GROUND_Y - this.radius; this.vy = 0; this.grounded = true; }
+            if (this.x - this.radius < 0) { this.x = this.radius; this.vx = 0; }
+            if (this.x + this.radius > CW) { this.x = CW - this.radius; this.vx = 0; }
+            if (this.y - this.radius < 0) { this.y = this.radius; this.vy = Math.max(0, this.vy); }
+            barCollide(this, 0);
             if (this.kickCooldown > 0) this.kickCooldown--;
             if (this.kickAnimTimer > 0) this.kickAnimTimer--;
-
-            this.x += this.vx;
-            this.y += this.vy;
-
-            if (this.x - this.radius < 0) { this.x = this.radius; this.vx *= -0.5; }
-            if (this.x + this.radius > CW) { this.x = CW - this.radius; this.vx *= -0.5; }
-            if (this.y - this.radius < 0) { this.y = this.radius; this.vy *= -0.5; }
         }
-
-        executeKick(isSuper) {
+        executeKick(sup) {
             this.kickAnimTimer = 15;
-            this.kickCooldown = 25;
-            
-            let dx = ball.x - this.x;
-            let dy = ball.y - this.y;
-            let dist = Math.hypot(dx, dy);
-            let inFront = (this.facing === 1 && dx > -25) || (this.facing === -1 && dx < 25);
-            
-            if (dist < this.radius + BALL_RADIUS + 100 && inFront) {
-                let powerX = isSuper ? 52 : 25;
-                let powerY = isSuper ? -36 : -18;
-                ball.vx = (this.facing * powerX) + (this.vx * 0.5);
-                ball.vy = powerY + (this.vy * 0.2);
-                if (isSuper) ball.isFireball = true;
-                lastBallTouchPlayer = this;
-            }
+            if (this.kickCooldown > 0 || !this.canReach()) return;
+            this.kickCooldown = 22;
+            let ang = 0.45 + Math.max(-0.2, Math.min(0.35, -(ball.y - this.y) / 160)), spd = 23, v = null;
+            if (sup) { v = pick(SUPERS); ang = v.ang; spd = v.spd; announce(`¡SÚPER TIRO ${v.name} ${de(this.data.nickname)}!`, v.col); }
+            ball.vx = this.facing * Math.cos(ang) * spd + this.vx * 0.3;
+            ball.vy = -Math.sin(ang) * spd + this.vy * 0.2;
+            ball.superType = v; ball.curveDir = Math.random() < 0.5 ? -1 : 1; ball.viaBar = false;
+            touch(this);
         }
-
         draw() {
             let r = this.radius;
             
@@ -562,142 +462,251 @@
             if (this.chargeTimer > 0) {
                 ctx.fillStyle = 'rgba(0,0,0,0.8)';
                 ctx.fillRect(this.x - 35, this.y - r - 24, 70, 9);
-                ctx.fillStyle = this.chargeTimer >= 260 ? '#ff006e' : '#ffb703';
-                ctx.fillRect(this.x - 33, this.y - r - 22, (66 * (this.chargeTimer / 350)), 5);
+                ctx.fillStyle = this.chargeTimer >= SUPER_CHARGE ? '#ff006e' : '#ffb703';
+                ctx.fillRect(this.x - 33, this.y - r - 22, (66 * (this.chargeTimer / MAX_CHARGE)), 5);
             }
         }
     }
 
     class Ball {
-        constructor() {
-            this.radius = BALL_RADIUS;
-            this.isFireball = false;
-            this.resetPos();
-        }
-
-        resetPos() {
-            this.x = CW / 2;
-            this.y = 100;
-            this.vx = 0;
-            this.vy = 0;
-            this.isFireball = false;
-        }
-
+        constructor() { this.radius = BALL_RADIUS; this.angle = 0; this.curveDir = 1; this.resetPos(); }
+        resetPos() { this.x = CW / 2; this.y = GROUND_Y - 260; this.vx = this.vy = 0; this.superType = null; this.viaBar = false; }
+        setRadius(r) { this.radius = r; if (this.y + r > GROUND_Y) this.y = GROUND_Y - r; }
         update() {
-            this.vy += GRAVITY;
-            this.vx *= AIR_RESISTANCE;
-            this.vy *= AIR_RESISTANCE;
-
-            this.x += this.vx;
-            this.y += this.vy;
-
-            if (this.y + this.radius > GROUND_Y) {
-                this.y = GROUND_Y - this.radius;
-                this.vy *= -BALL_BOUNCE;
-                this.vx *= FRICTION;
+            let sp = Math.hypot(this.vx, this.vy);
+            if (sp > MAX_BALL_SPEED) { this.vx *= MAX_BALL_SPEED / sp; this.vy *= MAX_BALL_SPEED / sp; sp = MAX_BALL_SPEED; }
+            this.vy += GRAVITY * gravityMul;
+            if (this.superType && this.superType.curve) this.vy += Math.sin(matchFrames * 0.25) * 0.9 * this.curveDir;
+            const n = Math.max(1, Math.ceil(sp / 12)); // subpasos: la pelota rápida no atraviesa nada
+            for (let i = 0; i < n; i++) {
+                this.x += this.vx / n; this.y += this.vy / n;
+                this.collide();
+                hitPlayer(player1, this); hitPlayer(player2, this);
             }
-            if (this.x - this.radius < 0) {
-                this.x = this.radius;
-                this.vx *= -BALL_BOUNCE;
+            this.vx *= 0.9985; this.vy *= 0.9985;
+            if (this.y + this.radius >= GROUND_Y - 0.5) this.vx *= 0.99;
+            this.angle += this.vx / this.radius * 0.5;
+        }
+        collide() {
+            const r = this.radius;
+            if (this.y + r > GROUND_Y) {
+                this.y = GROUND_Y - r;
+                if (this.vy > 2.5) { this.vy *= -BALL_BOUNCE; this.superType = null; } else this.vy = 0;
             }
-            if (this.x + this.radius > CW) {
-                this.x = CW - this.radius;
-                this.vx *= -BALL_BOUNCE;
+            if (this.y - r < 0) { this.y = r; this.vy *= -BALL_BOUNCE; }
+            const left = this.x - r < 0, right = this.x + r > CW;
+            if (left || right) { // el fondo de la red amortigua; el resto de la pared rebota normal
+                const s = left ? 0 : 1, e = this.y > GROUND_Y - goalH[s] ? 0.2 : BALL_BOUNCE;
+                this.x = left ? r : CW - r; this.vx *= -e;
             }
-            if (this.y - this.radius < 0) {
-                this.y = this.radius;
-                this.vy *= -BALL_BOUNCE;
+            if (barCollide(this, 0.72)) {
+                this.viaBar = true;
+                if (barCooldown <= 0 && Math.hypot(this.vx, this.vy) > 9) {
+                    barCooldown = 90;
+                    announce(lastTouch ? `¡AL TRAVESAÑO! CASI GOL ${de(lastTouch.data.nickname)}` : '¡AL TRAVESAÑO!', '#ffd166');
+                }
             }
         }
-
         draw() {
-            let br = this.radius;
-            ctx.save();
-            ctx.translate(this.x, this.y);
-
-            ctx.beginPath();
-            ctx.arc(0, 0, br, 0, Math.PI * 2);
-            ctx.fillStyle = this.isFireball ? '#ff006e' : '#ffffff';
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = '#000000';
-            ctx.stroke();
-
-            ctx.fillStyle = this.isFireball ? '#ffb703' : '#000000';
-            ctx.beginPath();
-            ctx.arc(0, 0, br * 0.4, 0, Math.PI * 2);
-            ctx.fill();
-
+            const r = this.radius, st = this.superType;
+            ctx.save(); ctx.translate(this.x, this.y);
+            if (st) {
+                ctx.fillStyle = st.col + '66';
+                ctx.beginPath(); ctx.arc(-this.vx * 0.6, -this.vy * 0.6, r * 1.2, 0, 7); ctx.fill();
+                ctx.beginPath(); ctx.arc(-this.vx * 0.3, -this.vy * 0.3, r * 1.1, 0, 7); ctx.fill();
+            }
+            ctx.rotate(this.angle);
+            ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fillStyle = st ? st.col : '#fff'; ctx.fill();
+            ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.stroke();
+            ctx.fillStyle = st ? '#ffb703' : '#000';
+            ctx.beginPath(); ctx.arc(0, 0, r * 0.38, 0, 7); ctx.fill();
+            for (let k = 0; k < 5; k++) { const a = k * 1.2566; ctx.beginPath(); ctx.arc(Math.cos(a) * r * 0.8, Math.sin(a) * r * 0.8, r * 0.16, 0, 7); ctx.fill(); }
             ctx.restore();
         }
     }
 
     const powerupBox = new PowerupBox();
-    let powerupSpawnTimer = 0;
 
-    function resolvePlayerCollision(p1, p2) {
-        let dx = p2.x - p1.x;
-        let dy = p2.y - p1.y;
-        let dist = Math.hypot(dx, dy);
-        let minDist = p1.radius + p2.radius;
-        
-        if (dist < minDist && dist > 0) {
-            let overlap = minDist - dist;
-            let nx = dx / dist;
-            let ny = dy / dist;
-            p1.x -= nx * (overlap / 2);
-            p1.y -= ny * (overlap / 2);
-            p2.x += nx * (overlap / 2);
-            p2.y += ny * (overlap / 2);
-            let avgVx = (p1.vx + p2.vx) / 2;
-            p1.vx = avgVx;
-            p2.vx = avgVx;
-        }
+    // Choque elástico: el jugador es mucho más pesado que la pelota
+    function hitPlayer(p, b) {
+        const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy), min = p.radius + b.radius;
+        if (d >= min || d === 0) return;
+        const nx = dx / d, ny = dy / d;
+        b.x += nx * (min - d); b.y += ny * (min - d);
+        const rel = (b.vx - p.vx) * nx + (b.vy - p.vy) * ny;
+        if (rel < 0) { const j = -1.7 * rel * 0.857; b.vx += j * nx; b.vy += j * ny; }
+        b.superType = null; b.viaBar = false; touch(p);
+    }
+    function pushPlayers(a, b) {
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.radius + b.radius;
+        if (d >= min || d === 0) return;
+        const nx = dx / d, ny = dy / d, o = (min - d) / 2;
+        a.x -= nx * o; a.y -= ny * o; b.x += nx * o; b.y += ny * o;
+        const rel = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+        if (rel < 0) { const j = -1.1 * rel / 2; b.vx += j * nx; b.vy += j * ny; a.vx -= j * nx; a.vy -= j * ny; }
+        if (ny > 0.6) a.grounded = true; else if (ny < -0.6) b.grounded = true;
     }
 
-    function resolvePlayerBallCollision(p, b) {
-        let dx = b.x - p.x;
-        let dy = b.y - p.y;
-        let dist = Math.hypot(dx, dy);
-        let minDist = p.radius + b.radius;
-        
-        if (dist < minDist) {
-            let overlap = minDist - dist;
-            let nx = dx / dist;
-            let ny = dy / dist;
-            b.x += nx * overlap;
-            b.y += ny * overlap;
-            b.vx = nx * 6.8 + (p.vx * 0.8);
-            b.vy = ny * 6.8 + (p.vy * 0.8);
-            lastBallTouchPlayer = p;
-        }
+    function endPowerup() {
+        player1.jumpForce = player2.jumpForce = BASE_JUMP_FORCE;
+        player1.moveSpeed = player2.moveSpeed = MOVE_SPEED;
+        player1.frozen = player2.frozen = false;
+        ball.setRadius(BALL_RADIUS); gravityMul = 1; goalTarget = [GOAL_H, GOAL_H]; activePowerup = null;
+    }
+    function triggerPowerup(p, type) {
+        endPowerup();
+        const q = p === player1 ? player2 : player1, A = p.data.nickname, B = q.data.nickname;
+        const dur = Math.round(PU_TYPES[type][1] * rnd(0.75, 1.3));
+        if (type === 'superJump') { p.jumpForce = BASE_JUMP_FORCE * 1.5; announce(`¡${A} AGARRÓ SALTO LOCO!`, '#06d6a0'); }
+        else if (type === 'freeze') { q.frozen = true; announce(`¡${A} CONGELÓ ${al(B)}!`, '#90e0ef'); }
+        else if (type === 'giantGoal') { goalTarget[q === player1 ? 0 : 1] = GOAL_H * 1.5; announce(`¡${A} AGRANDÓ EL ARCO ${de(B)}!`, '#ffd166'); }
+        else if (type === 'speedBoost') { p.moveSpeed = MOVE_SPEED * 1.6; announce(`¡${A} ACTIVÓ EL TURBO!`, '#ef476f'); }
+        else if (type === 'bigBall') { ball.setRadius(BALL_RADIUS * 1.5); announce(`¡PELOTÓN! LA PELOTA CRECIÓ POR ${A}`, '#ffffff'); }
+        else { gravityMul = 0.5; announce(`¡GRAVEDAD LUNAR POR CULPA ${de(A)}!`, '#b8c0ff'); }
+        activePowerup = { type, timer: dur };
     }
 
-    function triggerPowerup(beneficiaryPlayer) {
-        let isP1Beneficiary = (beneficiaryPlayer === player1);
-        
-        if (powerupBox.type === 'superJump') {
-            player1.jumpForce = BASE_JUMP_FORCE;
-            player2.jumpForce = BASE_JUMP_FORCE;
-            beneficiaryPlayer.jumpForce = BASE_JUMP_FORCE * 1.65;
-            activePowerup = { type: 'superJump', target: beneficiaryPlayer, timer: 300 };
-        } else if (powerupBox.type === 'freeze') {
-            let target = isP1Beneficiary ? player2 : player1;
-            player1.frozen = false;
-            player2.frozen = false;
-            target.frozen = true;
-            activePowerup = { type: 'freeze', target: target, timer: 180 };
-        } else if (powerupBox.type === 'giantGoal') {
-            activePowerup = { type: isP1Beneficiary ? 'giantGoalP2' : 'giantGoalP1', timer: 300 };
-        } else if (powerupBox.type === 'speedBoost') {
-            player1.moveSpeed = MOVE_SPEED;
-            player2.moveSpeed = MOVE_SPEED;
-            beneficiaryPlayer.moveSpeed = MOVE_SPEED * 1.6;
-            activePowerup = { type: 'speedBoost', target: beneficiaryPlayer, timer: 300 };
-        } else if (powerupBox.type === 'heavyBall') {
-            ball.radius = BALL_RADIUS * 1.45;
-            activePowerup = { type: 'heavyBall', timer: 240 };
+    // ---------- Reglas y carteles ----------
+    function checkGoal() {
+        const r = ball.radius; // solo es gol si la pelota ENTERA cruzó la línea y va por debajo del travesaño
+        if (ball.y > GROUND_Y - goalH[0] && ball.x + r < GOAL_W) registerGoal(0);
+        else if (ball.y > GROUND_Y - goalH[1] && ball.x - r > CW - GOAL_W) registerGoal(1);
+    }
+    function makePhrase(o) {
+        const A = o.att.data.nickname, B = o.def.data.nickname, f = o.f, a = o.a;
+        if (o.own) return pick([[`¡GOL EN CONTRA ${de(B)}!`, `${A} lo agradece`], [`¡${B} LA METIÓ EN SU PROPIO ARCO!`, `Regalito para ${A}`], [`¡AUTOGOL ${de(B)}!`, `${A} suma sin tocarla`]]);
+        if (suddenDeath) return [`¡GOL DE ORO ${de(A)}!`, `${B} se queda sin tiempo extra`];
+        if (o.end) return [`¡${A} CERRÓ EL PARTIDO!`, `${B} no tiene respuesta`];
+        if (o.sup) return [`¡SUPERGOLAZO ${de(A)}!`, `Un misil que ${B} ni vio pasar`];
+        if (o.bar) return [`¡${A} LA METIÓ DESPUÉS DEL TRAVESAÑO!`, `${B} no lo puede creer`];
+        if (timeRemaining <= 15) return [`¡GOL SOBRE LA HORA ${de(A)}!`, `${B} lo sufre en el final`];
+        if (f === a) return [`¡${A} IGUALÓ EL PARTIDO!`, `${f} a ${a}, todo abierto`];
+        if (f === 1 && a === 0) return [`¡${A} ABRIÓ EL MARCADOR!`, `${B} ya va perdiendo`];
+        if (f - a >= 3) return [`¡${A} ESTÁ DESTROZANDO ${al(B)}!`, `Paliza en marcha: ${f} a ${a}`];
+        if (f === a + 1 && a > 0) return [`¡${A} SE PUSO ADELANTE!`, `${B} tiene que reaccionar`];
+        if (a > f) return [`¡DESCUENTO ${de(A)}!`, `Todavía hay partido: ${a} a ${f}`];
+        return pick([[`¡GOLAZO ${de(A)}!`, `${B} no pudo hacer nada`], [`¡${A} LA MANDÓ A LA RED!`, `Gol para ${A}`], [`¡GOOOL ${de(A)}!`, `${B} se lamenta`]]);
+    }
+    function registerGoal(c) { // c = índice del arco donde entró (0 = arco de J1)
+        if (gameState !== 'PLAYING') return;
+        const att = c === 0 ? player2 : player1, def = c === 0 ? player1 : player2;
+        if (c === 0) p2Score++; else p1Score++;
+        const f = att === player1 ? p1Score : p2Score, a = att === player1 ? p2Score : p1Score;
+        const own = lastTouch === def;
+        goalInfo = makePhrase({ att, def, own, f, a, sup: !!ball.superType, bar: ball.viaBar, end: f >= MAX_GOALS });
+        pendingEnd = suddenDeath || p1Score >= MAX_GOALS || p2Score >= MAX_GOALS;
+        gameState = 'GOAL_PAUSE'; pauseFrames = 170; banner.timer = 0; spawnConfetti(); updateScoreUI();
+    }
+    function afterGoal() {
+        if (pendingEnd) { showGameOver(); return; }
+        player1.resetPos(); player2.resetPos(); ball.resetPos(); endPowerup();
+        powerupBox.active = false; boxTimer = rnd(500, 1000); lastTouch = prevTouch = null; barCooldown = 0;
+        gameState = 'PLAYING';
+    }
+
+    function step() {
+        matchFrames++;
+        if (barCooldown > 0) barCooldown--;
+        if (banner.timer > 0) banner.timer--;
+        for (let s = 0; s < 2; s++) goalH[s] += (goalTarget[s] - goalH[s]) * 0.08;
+        if (gameState === 'GOAL_PAUSE') {
+            ball.update();
+            confetti.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.4; p.rot += p.rs; });
+            if (--pauseFrames <= 0) afterGoal();
+            return;
         }
+        if (gameState !== 'PLAYING') return;
+        if (!suddenDeath && ++tickFrames >= 60) {
+            tickFrames = 0; timeRemaining--;
+            if (timeRemaining <= 0) {
+                if (p1Score === p2Score) { suddenDeath = true; announce('¡TIEMPO EXTRA! GOL DE ORO', '#ffd700'); }
+                else { showGameOver(); return; }
+            }
+            updateScoreUI();
+        }
+        player1.update(); player2.update(); pushPlayers(player1, player2); ball.update();
+        if (powerupBox.active) {
+            powerupBox.update();
+            let who = null;
+            for (const p of [player1, player2]) if (Math.hypot(p.x - powerupBox.x, p.y - powerupBox.y) < p.radius + powerupBox.size / 2) who = p;
+            if (!who && lastTouch && Math.hypot(ball.x - powerupBox.x, ball.y - powerupBox.y) < ball.radius + powerupBox.size / 2) who = lastTouch;
+            if (who) { powerupBox.active = false; triggerPowerup(who, powerupBox.type); }
+        } else if (!activePowerup && --boxTimer <= 0) { powerupBox.spawn(); }
+        if (activePowerup && --activePowerup.timer <= 0) { endPowerup(); boxTimer = rnd(420, 1000); }
+        checkGoal();
+    }
+
+    // ---------- Dibujo ----------
+    function drawField(t) {
+        const stripH = CH - GROUND_Y, mid = GROUND_Y + stripH / 2;
+        ctx.fillStyle = '#0b132b'; ctx.fillRect(0, 0, CW, GROUND_Y);
+        ctx.fillStyle = '#111827'; ctx.fillRect(0, 150, CW, GROUND_Y - 150);
+        for (let i = 150; i < GROUND_Y; i += 30) { ctx.fillStyle = (i % 60 === 0) ? '#1f2937' : '#374151'; ctx.fillRect(0, i, CW, 15); }
+        const jm = gameState === 'GOAL_PAUSE' ? 22 : 12;
+        crowd.forEach(h => {
+            const j = Math.abs(Math.sin(t * h.jumpSpeed)) * jm;
+            ctx.fillStyle = h.color; ctx.fillRect(h.x, h.y - j, h.size, h.size * 1.5);
+            ctx.fillStyle = '#fcd5ce'; ctx.fillRect(h.x + h.size * 0.1, h.y - j - h.size * 0.8, h.size * 0.8, h.size * 0.8);
+        });
+        ctx.fillStyle = '#48cae4'; ctx.fillRect(0, GROUND_Y - 20, CW, 20);
+        for (let i = 0; i < CW; i += 50) for (let j = GROUND_Y; j < CH; j += 20) { ctx.fillStyle = ((i / 50 + j / 20) % 2 === 0) ? '#2b9348' : '#007f5f'; ctx.fillRect(i, j, 50, 20); }
+        ctx.strokeStyle = '#fff'; ctx.fillStyle = '#fff'; ctx.lineWidth = 4;
+        ctx.fillRect(0, GROUND_Y, CW, 6); ctx.fillRect(CW / 2 - 3, GROUND_Y, 6, stripH);
+        ctx.beginPath(); ctx.ellipse(CW / 2, mid, 90, stripH / 2 - 6, 0, 0, 7); ctx.stroke();
+        for (let s = 0; s < 2; s++) {
+            const gx = s ? CW - GOAL_W : GOAL_W, ax = s ? gx - 230 : gx + 230;
+            ctx.fillRect(gx - 2, GROUND_Y, 4, stripH);                                   // línea de gol
+            ctx.strokeRect(Math.min(gx, ax), GROUND_Y + 8, 230, stripH - 16);            // área grande
+            ctx.beginPath(); ctx.arc(s ? gx - 130 : gx + 130, mid, 5, 0, 7); ctx.fill(); // punto penal
+        }
+    }
+    function drawGoals() {
+        for (let s = 0; s < 2; s++) {
+            const h = goalH[s], x0 = s ? CW - GOAL_W : 0, top = GROUND_Y - h;
+            ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(x0, top, GOAL_W, h);
+            ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5; ctx.beginPath();
+            for (let i = 0; i <= GOAL_W; i += 15) { ctx.moveTo(x0 + i, top); ctx.lineTo(x0 + i, GROUND_Y); }
+            for (let j = 0; j <= h; j += 15) { ctx.moveTo(x0, top + j); ctx.lineTo(x0 + GOAL_W, top + j); }
+            ctx.stroke();
+            ctx.fillStyle = '#fff'; ctx.fillRect(x0, top - POST_RADIUS, GOAL_W, POST_RADIUS * 2);
+            ctx.beginPath(); ctx.arc(s ? x0 : x0 + GOAL_W, top, POST_RADIUS, 0, 7); ctx.fill();
+            ctx.fillRect(s ? CW - 8 : 0, top, 8, h);
+        }
+    }
+    function fit(txt, px, maxW, bold) {
+        ctx.font = `${px}px "Press Start 2P"`;
+        while (ctx.measureText(txt).width > maxW && px > 12) { px -= 2; ctx.font = `${px}px "Press Start 2P"`; }
+    }
+    function render(t) {
+        drawField(t); drawGoals();
+        if (powerupBox.active) powerupBox.draw();
+        player1.draw(); player2.draw(); ball.draw();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        if (activePowerup) {
+            ctx.fillStyle = '#fff'; ctx.font = '14px "Press Start 2P"';
+            ctx.fillText(`${PU_TYPES[activePowerup.type][0]}  ${Math.ceil(activePowerup.timer / 60)}s`, CW / 2, 110);
+        }
+        if (banner.timer > 0 && gameState === 'PLAYING') {
+            ctx.save(); ctx.globalAlpha = Math.min(1, banner.timer / 30);
+            fit(banner.text, 22, CW - 200); ctx.shadowColor = '#000'; ctx.shadowBlur = 8; ctx.fillStyle = banner.color;
+            ctx.fillText(banner.text, CW / 2, 160); ctx.restore();
+        }
+        if (gameState === 'GOAL_PAUSE') {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, CW, CH);
+            confetti.forEach(p => { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot * Math.PI / 180); ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6); ctx.restore(); });
+            ctx.save(); ctx.shadowColor = '#ff006e'; ctx.shadowBlur = 25; ctx.fillStyle = '#ff006e';
+            fit(goalInfo[0], 38, CW - 160); ctx.fillText(goalInfo[0], CW / 2, CH / 2 - 10);
+            ctx.fillStyle = '#ffb703'; fit(goalInfo[1], 20, CW - 160); ctx.fillText(goalInfo[1], CW / 2, CH / 2 + 40);
+            ctx.restore();
+        }
+    }
+    let lastT = 0, acc = 0;
+    function frame(t) {
+        requestAnimationFrame(frame);
+        const dt = Math.min(t - lastT, 100); lastT = t;
+        if (gameState === 'MENU' || gameState === 'SELECT' || gameState === 'GAMEOVER') return;
+        acc += dt; while (acc >= STEP) { acc -= STEP; step(); }
+        render(t);
     }
 
     function initRosterUI() {
@@ -756,66 +765,21 @@
     }
 
     function initMatch() {
-        uiSelect.classList.add('hidden');
-        uiHud.classList.remove('hidden');
-        
+        uiSelect.classList.add('hidden'); uiHud.classList.remove('hidden');
         document.getElementById('p1-hud-name').textContent = p1Choice.name.toUpperCase();
-        document.getElementById('p2-hud-name').textContent = p2Choice.name.toUpperCase() + (currentMode==='CPU' ? ' (CPU)' : '');
-        
-        p1Score = 0; p2Score = 0;
-        timeRemaining = MATCH_DURATION;
-        powerupSpawnTimer = 0;
-        activePowerup = null;
-        lastBallTouchPlayer = null;
-        updateScoreUI();
-
-        let isP2CPU = currentMode === 'CPU';
-        player1 = new Player(CW/4, GROUND_Y - PLAYER_RADIUS, true, p1Choice, false);
-        player2 = new Player((CW/4)*3, GROUND_Y - PLAYER_RADIUS, false, p2Choice, isP2CPU);
-        ball = new Ball();
-
-        gameState = 'PLAYING';
-        lastTimeFrame = performance.now();
-        requestAnimationFrame(gameLoop);
+        document.getElementById('p2-hud-name').textContent = p2Choice.name.toUpperCase() + (currentMode === 'CPU' ? ' (CPU)' : '');
+        p1Score = p2Score = 0; timeRemaining = MATCH_DURATION; tickFrames = 0; suddenDeath = false; pendingEnd = false;
+        goalH = [GOAL_H, GOAL_H]; goalTarget = [GOAL_H, GOAL_H]; gravityMul = 1; matchFrames = 0; barCooldown = 0;
+        lastTouch = prevTouch = null; activePowerup = null; lastBoxType = ''; powerupBox.active = false; boxTimer = rnd(500, 1000); banner.timer = 0;
+        player1 = new Player(CW / 4, true, p1Choice, false);
+        player2 = new Player(CW * 3 / 4, false, p2Choice, currentMode === 'CPU');
+        ball = new Ball(); updateScoreUI();
+        gameState = 'PLAYING'; acc = 0; lastT = performance.now();
     }
-
-    function registerGoal(scoringTeam) {
-        if (gameState !== 'PLAYING') return;
-        gameState = 'GOAL_PAUSE';
-        
-        if (scoringTeam === 1) {
-            p1Score++;
-        } else {
-            p2Score++;
-        }
-
-        let scorerPlayer = lastBallTouchPlayer || (scoringTeam === 1 ? player1 : player2);
-        goalScorerNickname = scorerPlayer.data.nickname;
-        
-        spawnConfetti();
-        updateScoreUI();
-
-        if (p1Score >= MAX_GOALS || p2Score >= MAX_GOALS) {
-            setTimeout(showGameOver, 2500);
-        } else {
-            setTimeout(() => {
-                if (gameState !== 'GAMEOVER') {
-                    player1.resetPos();
-                    player2.resetPos();
-                    ball.resetPos();
-                    powerupBox.active = false;
-                    gameState = 'PLAYING';
-                }
-            }, 2500);
-        }
-    }
-
     function updateScoreUI() {
         document.getElementById('p1-score').textContent = p1Score;
         document.getElementById('p2-score').textContent = p2Score;
-        let mins = Math.floor(timeRemaining / 60);
-        let secs = timeRemaining % 60;
-        document.getElementById('timer-box').textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        document.getElementById('timer-box').textContent = suddenDeath ? 'GOL DE ORO' : `${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`;
     }
 
     function showGameOver() {
@@ -830,201 +794,8 @@
         document.getElementById('final-score').textContent = `${p1Score} - ${p2Score}`;
     }
 
-    function gameLoop(timestamp) {
-        if (gameState === 'MENU' || gameState === 'SELECT') return;
-
-        if (gameState === 'PLAYING') {
-            if (timestamp - lastTimeFrame >= 1000) {
-                timeRemaining--;
-                powerupSpawnTimer++;
-                updateScoreUI();
-                lastTimeFrame = timestamp;
-                if (timeRemaining <= 0) { showGameOver(); return; }
-
-                if (powerupSpawnTimer >= 11 && !powerupBox.active && !activePowerup) {
-                    powerupBox.spawn();
-                    powerupSpawnTimer = 0;
-                }
-            }
-        }
-
-        ctx.clearRect(0, 0, CW, CH);
-        
-        ctx.fillStyle = '#0b132b';
-        ctx.fillRect(0, 0, CW, GROUND_Y);
-        
-        ctx.fillStyle = '#111827';
-        ctx.fillRect(0, 150, CW, GROUND_Y - 150);
-        for(let i = 150; i < GROUND_Y; i += 30) {
-            ctx.fillStyle = (i % 60 === 0) ? '#1f2937' : '#374151';
-            ctx.fillRect(0, i, CW, 15);
-        }
-
-        if (gameState === 'PLAYING' || gameState === 'GOAL_PAUSE') {
-            crowd.forEach(hincha => {
-                let jump = Math.abs(Math.sin(timestamp * hincha.jumpSpeed)) * 12;
-                ctx.fillStyle = hincha.color;
-                ctx.fillRect(hincha.x, hincha.y - jump, hincha.size, hincha.size * 1.5);
-                ctx.fillStyle = '#fcd5ce';
-                ctx.fillRect(hincha.x + hincha.size * 0.1, hincha.y - jump - hincha.size * 0.8, hincha.size * 0.8, hincha.size * 0.8);
-            });
-        }
-        
-        ctx.fillStyle = '#48cae4';
-        ctx.fillRect(0, GROUND_Y - 20, CW, 20);
-
-        for(let i = 0; i < CW; i += 50) {
-            for (let j = GROUND_Y; j < CH; j += 20) {
-                ctx.fillStyle = ((i/50 + j/20) % 2 === 0) ? '#2b9348' : '#007f5f';
-                ctx.fillRect(i, j, 50, 20);
-            }
-        }
-        
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, GROUND_Y, CW, 8);
-        ctx.fillRect(CW/2 - 4, GROUND_Y, 8, CH - GROUND_Y);
-
-        let p1GoalH = GOAL_H;
-        let p2GoalH = GOAL_H;
-        if (activePowerup) {
-            if (activePowerup.type === 'giantGoalP2') p2GoalH = GOAL_H * 1.45;
-            if (activePowerup.type === 'giantGoalP1') p1GoalH = GOAL_H * 1.45;
-        }
-
-        // --- ARCOS Y REDES COMPLETOS EN AMBOS LADOS ---
-        // Arco Izquierdo
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-        for(let i = 0; i < GOAL_W; i += 12) {
-            for(let j = 0; j < p1GoalH; j += 12) {
-                if ((i + j) % 24 === 0) ctx.fillRect(i, GROUND_Y - p1GoalH + j, 10, 10);
-            }
-        }
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, GROUND_Y - p1GoalH - POST_RADIUS, GOAL_W, POST_RADIUS * 2);
-
-        // Arco Derecho
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-        for(let i = CW - GOAL_W; i < CW; i += 12) {
-            for(let j = 0; j < p2GoalH; j += 12) {
-                if ((i + j) % 24 === 0) ctx.fillRect(i, GROUND_Y - p2GoalH + j, 10, 10);
-            }
-        }
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(CW - GOAL_W, GROUND_Y - p2GoalH - POST_RADIUS, GOAL_W, POST_RADIUS * 2);
-
-        if (gameState === 'PLAYING' || gameState === 'GOAL_PAUSE') {
-            if (gameState === 'PLAYING') {
-                player1.update();
-                player2.update();
-                ball.update();
-
-                resolvePlayerCollision(player1, player2);
-                resolvePlayerBallCollision(player1, ball);
-                resolvePlayerBallCollision(player2, ball);
-
-                // Rebote en los travesaños superiores (postes verticales totalmente abiertos)
-                let topYLeft = GROUND_Y - p1GoalH - POST_RADIUS;
-                if (ball.x > 0 && ball.x < GOAL_W) {
-                    if (Math.abs(ball.y - (topYLeft + POST_RADIUS)) < ball.radius + POST_RADIUS && ball.vy > 0) {
-                        ball.y = topYLeft - ball.radius;
-                        ball.vy *= -BALL_BOUNCE;
-                    }
-                }
-                let topYRight = GROUND_Y - p2GoalH - POST_RADIUS;
-                if (ball.x > CW - GOAL_W && ball.x < CW) {
-                    if (Math.abs(ball.y - (topYRight + POST_RADIUS)) < ball.radius + POST_RADIUS && ball.vy > 0) {
-                        ball.y = topYRight - ball.radius;
-                        ball.vy *= -BALL_BOUNCE;
-                    }
-                }
-
-                if (powerupBox.active) {
-                    powerupBox.draw();
-                    let distP1 = Math.hypot(player1.x - powerupBox.x, player1.y - powerupBox.y);
-                    let distP2 = Math.hypot(player2.x - powerupBox.x, player2.y - powerupBox.y);
-                    let distBall = Math.hypot(ball.x - powerupBox.x, ball.y - powerupBox.y);
-                    let hitPlayer = null;
-
-                    if (distP1 < player1.radius + powerupBox.size/2) hitPlayer = player1;
-                    else if (distP2 < player2.radius + powerupBox.size/2) hitPlayer = player2;
-                    else if (distBall < ball.radius + powerupBox.size/2) {
-                        hitPlayer = lastBallTouchPlayer || player1;
-                    }
-
-                    if (hitPlayer) {
-                        powerupBox.active = false;
-                        triggerPowerup(hitPlayer);
-                    }
-                }
-
-                if (activePowerup) {
-                    activePowerup.timer--;
-                    if (activePowerup.timer <= 0) {
-                        player1.jumpForce = BASE_JUMP_FORCE;
-                        player2.jumpForce = BASE_JUMP_FORCE;
-                        player1.moveSpeed = MOVE_SPEED;
-                        player2.moveSpeed = MOVE_SPEED;
-                        player1.frozen = false;
-                        player2.frozen = false;
-                        ball.radius = BALL_RADIUS;
-                        activePowerup = null;
-                    }
-                }
-
-                // Detección de Goles (Incluyendo goles en contra)
-                if (ball.y > GROUND_Y - Math.max(p1GoalH, p2GoalH) + 15) {
-                    if (ball.x < GOAL_W) {
-                        // Entra en arco izquierdo -> Anota el Jugador 2
-                        registerGoal(2); 
-                    } else if (ball.x > CW - GOAL_W) {
-                        // Entra en arco derecho -> Anota el Jugador 1
-                        registerGoal(1); 
-                    }
-                }
-            }
-
-            player1.draw();
-            player2.draw();
-            ball.draw();
-
-            if (gameState === 'GOAL_PAUSE') {
-                ctx.fillStyle = 'rgba(0,0,0,0.65)';
-                ctx.fillRect(0, 0, CW, CH);
-
-                confettiParticles.forEach(p => {
-                    p.x += p.vx;
-                    p.y += p.vy;
-                    p.vy += 0.4;
-                    p.rotation += p.rotSpeed;
-                    
-                    ctx.save();
-                    ctx.translate(p.x, p.y);
-                    ctx.rotate((p.rotation * Math.PI) / 180);
-                    ctx.fillStyle = p.color;
-                    ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size * 0.6);
-                    ctx.restore();
-                });
-
-                ctx.save();
-                ctx.shadowColor = '#ff006e';
-                ctx.shadowBlur = 25;
-                ctx.fillStyle = '#ff006e';
-                ctx.font = '32px "Press Start 2P"';
-                ctx.textAlign = 'center';
-                // Formato de texto exacto requerido: "GOLAZO DE [APODO]"
-                ctx.fillText(`GOLAZO DE ${goalScorerNickname}`, CW/2, CH/2 - 20);
-                
-                ctx.fillStyle = '#ffb703';
-                ctx.font = '18px "Press Start 2P"';
-                ctx.fillText(`¡IMPARABLE!`, CW/2, CH/2 + 30);
-                ctx.restore();
-            }
-        }
-
-        if (gameState !== 'GAMEOVER') requestAnimationFrame(gameLoop);
-    }
-
     goToMenu();
+    requestAnimationFrame(frame);
 </script>
 </body>
 </html>

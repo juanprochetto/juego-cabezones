@@ -155,12 +155,18 @@
         ::-webkit-scrollbar { width: 10px; }
         ::-webkit-scrollbar-track { background: #1c2541; border-radius: 5px; }
         ::-webkit-scrollbar-thumb { background: #48cae4; border-radius: 5px; }
+        .score-panel, #timer-box { display: none !important; }
+        #pause-btn { position: fixed; top: 14px; right: 14px; z-index: 20; pointer-events: auto; width: 48px; height: 48px;
+            background: #f72585; color: #fff; border: 4px solid #ff99c8; border-radius: 50%; font-family: inherit; font-size: 14px;
+            cursor: pointer; box-shadow: 0 4px 0 #7209b7; }
+        #pause-btn:active { transform: translateY(4px); box-shadow: none; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
     <div id="hud" class="hidden">
+        <button id="pause-btn" onclick="togglePause()" title="Pausa (P / ESC)">II</button>
         <div class="score-panel" style="border-color: #48cae4;">
             <span id="p1-hud-name" class="player-name text-cyan-300">P1</span>
             <span id="p1-score" class="score-num text-white">0</span>
@@ -206,6 +212,13 @@
         <button class="arcade-btn mt-6 text-sm py-2 px-6" onclick="goToMenu()">VOLVER</button>
     </div>
 
+    <div id="ui-pause" class="ui-layer hidden" style="background: rgba(11,19,43,0.75);">
+        <h1 class="text-4xl text-yellow-300 mb-8 text-center" style="text-shadow: 4px 4px 0 #f72585;">PAUSA</h1>
+        <button class="arcade-btn blue" onclick="togglePause()">CONTINUAR</button>
+        <button class="arcade-btn" onclick="goToMenu()">MENÚ PRINCIPAL</button>
+        <p class="text-xs text-gray-300 mt-4">P o ESC para pausar / continuar</p>
+    </div>
+
     <div id="ui-gameover" class="ui-layer hidden">
         <h1 class="text-5xl text-yellow-300 mb-4 text-center" style="text-shadow: 4px 4px 0 #000;">¡FINAL DEL PARTIDO!</h1>
         <h2 id="winner-text" class="text-3xl text-white mb-6 text-center">GANA JUGADOR 1</h2>
@@ -238,11 +251,12 @@
     const uiSelect = document.getElementById('ui-select');
     const uiGameover = document.getElementById('ui-gameover');
     const uiHud = document.getElementById('hud');
+    const uiPause = document.getElementById('ui-pause');
 
     const CW = canvas.width, CH = canvas.height, GROUND_Y = 620;
-    const GRAVITY = 0.6, FRICTION = 0.85;
-    const PLAYER_RADIUS = 38, FOOT_SIZE = 20, BASE_JUMP_FORCE = 14.5, MOVE_SPEED = 6.5;
-    const BALL_RADIUS = 22, BALL_BOUNCE = 0.78, MAX_BALL_SPEED = 46;
+    const GRAVITY = 0.6, BALL_GRAVITY = 0.32, FRICTION = 0.85;
+    const PLAYER_RADIUS = 44, FOOT_SIZE = 20, BASE_JUMP_FORCE = 14.5, MOVE_SPEED = 7;
+    const BALL_RADIUS = 22, BALL_BOUNCE = 0.85, MAX_BALL_SPEED = 30;
     const MAX_GOALS = 5, MATCH_DURATION = 150;
     const GOAL_W = 150, GOAL_H = 210, POST_RADIUS = 10;
     const SUPER_CHARGE = 70, MAX_CHARGE = 100, STEP = 1000 / 60;
@@ -253,9 +267,9 @@
     const al = n => n.startsWith('EL ') ? 'AL ' + n.slice(3) : 'A ' + n;
 
     const SUPERS = [
-        { name: 'FUEGO', ang: 0.18, spd: 40, col: '#ff006e' },
-        { name: 'COHETE', ang: 0.8, spd: 38, col: '#ffb703' },
-        { name: 'CURVA', ang: 0.42, spd: 36, col: '#7209b7', curve: true }
+        { name: 'FUEGO', ang: 0.18, spd: 27, col: '#ff006e' },
+        { name: 'COHETE', ang: 0.8, spd: 26, col: '#ffb703' },
+        { name: 'CURVA', ang: 0.42, spd: 24, col: '#7209b7', curve: true }
     ];
     const PU_TYPES = {
         superJump: ['SALTO LOCO', 300], freeze: ['CONGELAR', 180], giantGoal: ['ARCO GIGANTE', 300],
@@ -263,8 +277,10 @@
     };
 
     const crowd = [];
-    const crowdColors = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#fff', '#f15bb5', '#00bbf9'];
-    for (let i = 0; i < 380; i++) crowd.push({ x: Math.random() * CW, y: 160 + Math.random() * (GROUND_Y - 380), color: pick(crowdColors), jumpSpeed: 0.003 + Math.random() * 0.008, size: 6 + Math.random() * 6 });
+    const fanCols = ['#8e44ad', '#c0392b', '#e84393', '#2980b9', '#f1c40f', '#ecf0f1', '#e67e22', '#5b3cc4'];
+    const fanSkins = ['#fcd5ce', '#e8b89e', '#c58c67', '#8d5524'];
+    for (let row = 0; row < 11; row++) for (let x = -10 + (row % 2) * 12; x < CW; x += 24 + Math.random() * 6)
+        crowd.push({ x: x + rnd(-3, 3), y: 185 + row * 25, s: 8 + row * 0.6, c: pick(fanCols), sk: pick(fanSkins), js: 0.003 + Math.random() * 0.007 });
 
     let confetti = [];
     function spawnConfetti() {
@@ -280,7 +296,7 @@
     let boxTimer = 600, lastBoxType = '';
 
     const keys = {};
-    window.addEventListener('keydown', e => { keys[e.code] = true; if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); });
+    window.addEventListener('keydown', e => { keys[e.code] = true; if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); if ((e.code === 'KeyP' || e.code === 'Escape') && !e.repeat) togglePause(); });
     window.addEventListener('keyup', e => { keys[e.code] = false; });
 
     function announce(text, color = '#ffb703') { banner = { text, timer: 150, color }; }
@@ -378,7 +394,7 @@
             this.kickAnimTimer = 15;
             if (this.kickCooldown > 0 || !this.canReach()) return;
             this.kickCooldown = 22;
-            let ang = 0.45 + Math.max(-0.2, Math.min(0.35, -(ball.y - this.y) / 160)), spd = 23, v = null;
+            let ang = 0.75 + Math.max(-0.2, Math.min(0.35, -(ball.y - this.y) / 160)), spd = 15, v = null;
             if (sup) { v = pick(SUPERS); ang = v.ang; spd = v.spd; announce(`¡SÚPER TIRO ${v.name} ${de(this.data.nickname)}!`, v.col); }
             ball.vx = this.facing * Math.cos(ang) * spd + this.vx * 0.3;
             ball.vy = -Math.sin(ang) * spd + this.vy * 0.2;
@@ -386,84 +402,64 @@
             touch(this);
         }
         draw() {
-            let r = this.radius;
-            
-            ctx.fillStyle = '#000';
-            ctx.fillRect(this.x - r + 2, this.y - r - 2, r*2 - 4, r*2 + 4);
-            ctx.fillRect(this.x - r - 2, this.y - r + 2, r*2 + 4, r*2 - 4);
-
-            ctx.fillStyle = this.frozen ? '#90e0ef' : (this.data.skinColor || '#fcd5ce');
-            ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*2);
-            ctx.fillRect(this.x - r, this.y - r + 4, r*2, r*2 - 8);
-
-            // Camiseta con franja o diseño distintivo
-            ctx.fillStyle = this.data.color;
-            ctx.fillRect(this.x - r + 6, this.y + 2, r*2 - 12, r*0.9);
-            ctx.fillStyle = this.data.stripeColor || '#ffffff';
-            ctx.fillRect(this.x - 6, this.y + 2, 12, r*0.9);
-
-            ctx.fillStyle = this.data.hairColor || '#000';
-            let style = this.data.style;
-            
-            if (style === 'curly') {
-                ctx.fillRect(this.x - r + 2, this.y - r, r*2 - 4, r*0.8);
-                ctx.fillRect(this.x - r - 4, this.y - r + 4, 8, 12);
-                ctx.fillRect(this.x + r - 4, this.y - r + 4, 8, 12);
-            } else if (style === 'spiky') {
-                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.6);
-                ctx.fillRect(this.x - 10, this.y - r - 8, 8, 12);
-                ctx.fillRect(this.x + 2, this.y - r - 10, 8, 14);
-            } else if (style === 'beard') {
-                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.5);
-                ctx.fillRect(this.x - r + 6, this.y + 4, r*2 - 12, r*0.6);
-            } else if (style === 'cap') {
-                ctx.fillRect(this.x - r + 2, this.y - r, r*2 - 4, r*0.5);
-                ctx.fillRect(this.x + (this.facing === 1 ? 0 : -r), this.y - r + 2, r*0.8, 6);
-            } else if (style === 'visor') {
-                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.6);
-                ctx.fillStyle = '#00f5d4';
-                ctx.fillRect(this.x - r + 6, this.y - 8, r*2 - 12, 6);
-                ctx.fillRect(this.x + (this.facing * 12), this.y - r - 8, 3, 10);
-            } else if (style === 'flower') {
-                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.6);
-                ctx.fillStyle = '#ff007f';
-                ctx.fillRect(this.x + 8, this.y - r - 6, 10, 10);
-            } else if (style === 'mate') {
-                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.6);
-                ctx.fillStyle = '#7f5539';
-                let mateX = this.x + (this.facing === 1 ? r - 4 : -r - 12);
-                ctx.fillRect(mateX, this.y + 8, 12, 14);
-                ctx.fillStyle = '#00ffcc';
-                ctx.fillRect(mateX + 4, this.y + 2, 2, 8);
-            } else {
-                ctx.fillRect(this.x - r + 4, this.y - r, r*2 - 8, r*0.6);
-                ctx.fillRect(this.x - r, this.y - r + 4, r*2, r*0.4);
+            const R = this.radius, k = R / 38, wx = this.x, wy = this.y, r = 38, f = this.facing, d = this.data, x = 0, y = 0, st = d.style;
+            const air = Math.max(0, GROUND_Y - (wy + R));
+            ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(wx, GROUND_Y + 12, 46 * Math.max(0.4, 1 - air / 450), 10, 0, 0, 7); ctx.fill();
+            ctx.save(); ctx.translate(wx, wy); ctx.scale(k, k);
+            ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = '#000';
+            // oreja
+            ctx.fillStyle = d.skinColor; ctx.fillRect(x - f * (r + 2) - 4, y - 4, 8, 16); ctx.lineWidth = 3; ctx.strokeRect(x - f * (r + 2) - 4, y - 4, 8, 16);
+            // cabeza
+            ctx.lineWidth = 4; rr(x - r, y - r, r * 2, r * 2 - 4, 22); ctx.fillStyle = this.frozen ? '#b8e6f5' : d.skinColor; ctx.fill();
+            ctx.save(); rr(x - r, y - r, r * 2, r * 2 - 4, 22); ctx.clip(); ctx.fillStyle = d.hairColor;
+            if (st === 'bald') { ctx.fillRect(x - r, y - 18, 10, 26); ctx.fillRect(x + r - 10, y - 18, 10, 26); }
+            else ctx.fillRect(x - r, y - r, r * 2, st === 'slick' ? 26 : st === 'flat' ? 20 : 24);
+            if (st === 'beard') ctx.fillRect(x - r, y + 12, r * 2, r);
+            if (st === 'headband') { ctx.fillStyle = d.stripeColor; ctx.fillRect(x - r, y - r + 24, r * 2, 10); }
+            ctx.restore();
+            rr(x - r, y - r, r * 2, r * 2 - 4, 22); ctx.stroke();
+            ctx.fillStyle = d.hairColor;
+            if (st === 'curly') for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(x - r + 10 + i * (r * 2 - 20) / 4, y - r + 4, 13, 0, 7); ctx.fill(); }
+            else if (st === 'spiky') for (let i = 0; i < 5; i++) { const bx = x - r + 8 + i * 15; ctx.beginPath(); ctx.moveTo(bx, y - r + 6); ctx.lineTo(bx + 7, y - r - 16); ctx.lineTo(bx + 14, y - r + 6); ctx.fill(); }
+            else if (st === 'messy') { ctx.fillRect(x - 20, y - r - 8, 12, 12); ctx.fillRect(x + 4, y - r - 12, 14, 16); ctx.fillRect(x - r + 2, y - r - 4, 10, 10); ctx.fillRect(x + r - 14, y - r - 4, 12, 10); }
+            else if (st === 'flower') { ctx.fillStyle = '#ff007f'; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(x - f * 20 + Math.cos(i * 1.257) * 8, y - r + 6 + Math.sin(i * 1.257) * 8, 6, 0, 7); ctx.fill(); } ctx.fillStyle = '#ffd60a'; ctx.beginPath(); ctx.arc(x - f * 20, y - r + 6, 5, 0, 7); ctx.fill(); }
+            else if (st === 'cap') { rr(x - r - 2, y - r - 8, r * 2 + 4, 32, 12); ctx.fillStyle = d.color; ctx.fill(); ctx.lineWidth = 3; ctx.stroke(); rr(f > 0 ? x + 6 : x - 46, y - r + 18, 40, 9, 4); ctx.fillStyle = d.stripeColor; ctx.fill(); ctx.stroke(); }
+            // cara
+            const ex = [x + f * 6, x + f * 26];
+            ctx.lineWidth = 2;
+            for (const e of ex) {
+                ctx.fillStyle = '#fff'; ctx.fillRect(e - 6, y - 12, 13, 15); ctx.strokeRect(e - 6, y - 12, 13, 15);
+                ctx.fillStyle = '#000'; ctx.fillRect(e + (f > 0 ? 1 : -5), y - 8, 6, 9);
+                ctx.fillRect(e - 7, y - (this.chargeTimer >= SUPER_CHARGE ? 15 : 19), 15, 4);
             }
-
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(this.x + (8 * this.facing), this.y - 8, 10, 10);
-            ctx.fillRect(this.x + (24 * this.facing), this.y - 8, 10, 10);
-            ctx.fillStyle = '#000';
-            ctx.fillRect(this.x + (12 * this.facing), this.y - 4, 4, 4);
-            ctx.fillRect(this.x + (28 * this.facing), this.y - 4, 4, 4);
-            ctx.fillRect(this.x + (14 * this.facing), this.y + 12, 12, 4);
-
-            let footOffsetX = 5 * this.facing;
-            let footOffsetY = r + 5;
-            if (this.kickAnimTimer > 0) {
-                footOffsetX = 35 * this.facing;
-                footOffsetY = r - 10;
-            }
-            ctx.fillStyle = '#000';
-            ctx.fillRect(this.x + footOffsetX - FOOT_SIZE - 2, this.y + footOffsetY - FOOT_SIZE/2 - 2, FOOT_SIZE*2 + 4, FOOT_SIZE + 4);
-            ctx.fillStyle = this.data.color;
-            ctx.fillRect(this.x + footOffsetX - FOOT_SIZE, this.y + footOffsetY - FOOT_SIZE/2, FOOT_SIZE*2, FOOT_SIZE);
-
+            if (st === 'visor') { ctx.fillStyle = 'rgba(0,245,212,0.55)'; ctx.fillRect(x - r + 4, y - 15, r * 2 - 8, 20); ctx.strokeRect(x - r + 4, y - 15, r * 2 - 8, 20); ctx.fillStyle = '#000'; ctx.fillRect(x + f * 12, y - r - 10, 3, 12); }
+            ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(x + f * 36 - (f < 0 ? 6 : 0), y - 2, 6, 9);
+            const mx = x + f * 18, open = this.kickAnimTimer > 0 || this.chargeTimer > 20;
+            rr(mx - 11, y + 9, 22, open ? 16 : 10, 3); ctx.fillStyle = open ? '#000' : '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
+            if (st === 'lollipop') { ctx.beginPath(); ctx.moveTo(mx + f * 6, y + 15); ctx.lineTo(mx + f * 24, y + 3); ctx.stroke(); ctx.fillStyle = d.stripeColor; ctx.beginPath(); ctx.arc(mx + f * 26, y + 1, 12, 0, 7); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(mx + f * 26, y + 1, 6, 0, 7); ctx.fill(); }
+            if (st === 'mate') { ctx.fillStyle = '#7f5539'; rr(x + f * (r - 4) - (f < 0 ? 16 : 0), y + 12, 16, 20, 4); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#3a5a40'; ctx.fillRect(x + f * (r - 4) - (f < 0 ? 16 : 0) + 2, y + 12, 12, 4); }
+            if (this.frozen) { ctx.fillStyle = 'rgba(144,224,239,0.5)'; rr(x - r, y - r, r * 2, r * 2 + 10, 20); ctx.fill(); }
+            // championes
+            const shoe = (sx, sy, rot) => {
+                ctx.save(); ctx.translate(sx, sy); ctx.scale(f, 1); ctx.rotate(rot);
+                rr(-24, -13, 50, 26, 11); ctx.fillStyle = '#111'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.stroke();
+                ctx.fillStyle = '#fff'; rr(-24, 8, 50, 6, 3); ctx.fill();
+                ctx.fillStyle = d.color; ctx.fillRect(-14, -3, 22, 5);
+                ctx.fillStyle = '#e9ecef'; ctx.fillRect(2, -12, 3, 7); ctx.fillRect(9, -10, 3, 7); ctx.fillRect(16, -7, 3, 6);
+                ctx.restore();
+            };
+            const fy = y + r + 4;
+            shoe(x - f * 12, fy, 0);
+            if (this.chargeTimer >= SUPER_CHARGE) { ctx.fillStyle = 'rgba(255,0,110,0.35)'; ctx.beginPath(); ctx.arc(x + f * 16, fy, 30, 0, 7); ctx.fill(); }
+            if (this.kickAnimTimer > 0) shoe(x + f * 40, fy - 14, -0.55); else shoe(x + f * 14, fy, 0);
+            ctx.restore();
+            // nombre y barra de carga
+            ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.font = '10px "Press Start 2P"'; ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+            ctx.strokeText(d.nickname, wx, wy - R - 22); ctx.fillStyle = this.isP1 ? '#48cae4' : '#f72585'; ctx.fillText(d.nickname, wx, wy - R - 22);
             if (this.chargeTimer > 0) {
-                ctx.fillStyle = 'rgba(0,0,0,0.8)';
-                ctx.fillRect(this.x - 35, this.y - r - 24, 70, 9);
+                ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(wx - 35, wy - R - 48, 70, 9);
                 ctx.fillStyle = this.chargeTimer >= SUPER_CHARGE ? '#ff006e' : '#ffb703';
-                ctx.fillRect(this.x - 33, this.y - r - 22, (66 * (this.chargeTimer / MAX_CHARGE)), 5);
+                ctx.fillRect(wx - 33, wy - R - 46, 66 * (this.chargeTimer / MAX_CHARGE), 5);
             }
         }
     }
@@ -475,15 +471,15 @@
         update() {
             let sp = Math.hypot(this.vx, this.vy);
             if (sp > MAX_BALL_SPEED) { this.vx *= MAX_BALL_SPEED / sp; this.vy *= MAX_BALL_SPEED / sp; sp = MAX_BALL_SPEED; }
-            this.vy += GRAVITY * gravityMul;
-            if (this.superType && this.superType.curve) this.vy += Math.sin(matchFrames * 0.25) * 0.9 * this.curveDir;
+            this.vy += BALL_GRAVITY * gravityMul;
+            if (this.superType && this.superType.curve) this.vy += Math.sin(matchFrames * 0.25) * 0.6 * this.curveDir;
             const n = Math.max(1, Math.ceil(sp / 12)); // subpasos: la pelota rápida no atraviesa nada
             for (let i = 0; i < n; i++) {
                 this.x += this.vx / n; this.y += this.vy / n;
                 this.collide();
                 hitPlayer(player1, this); hitPlayer(player2, this);
             }
-            this.vx *= 0.9985; this.vy *= 0.9985;
+            this.vx *= 0.996; this.vy *= 0.996;
             if (this.y + this.radius >= GROUND_Y - 0.5) this.vx *= 0.99;
             this.angle += this.vx / this.radius * 0.5;
         }
@@ -509,6 +505,8 @@
         }
         draw() {
             const r = this.radius, st = this.superType;
+            const h = Math.max(0, GROUND_Y - (this.y + r));
+            ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(this.x, GROUND_Y + 6, r * Math.max(0.35, 1 - h / 600), 6, 0, 0, 7); ctx.fill();
             ctx.save(); ctx.translate(this.x, this.y);
             if (st) {
                 ctx.fillStyle = st.col + '66';
@@ -637,33 +635,75 @@
     }
 
     // ---------- Dibujo ----------
-    function drawField(t) {
-        const stripH = CH - GROUND_Y, mid = GROUND_Y + stripH / 2;
-        ctx.fillStyle = '#0b132b'; ctx.fillRect(0, 0, CW, GROUND_Y);
-        ctx.fillStyle = '#111827'; ctx.fillRect(0, 150, CW, GROUND_Y - 150);
-        for (let i = 150; i < GROUND_Y; i += 30) { ctx.fillStyle = (i % 60 === 0) ? '#1f2937' : '#374151'; ctx.fillRect(0, i, CW, 15); }
-        const jm = gameState === 'GOAL_PAUSE' ? 22 : 12;
-        crowd.forEach(h => {
-            const j = Math.abs(Math.sin(t * h.jumpSpeed)) * jm;
-            ctx.fillStyle = h.color; ctx.fillRect(h.x, h.y - j, h.size, h.size * 1.5);
-            ctx.fillStyle = '#fcd5ce'; ctx.fillRect(h.x + h.size * 0.1, h.y - j - h.size * 0.8, h.size * 0.8, h.size * 0.8);
-        });
-        ctx.fillStyle = '#48cae4'; ctx.fillRect(0, GROUND_Y - 20, CW, 20);
-        for (let i = 0; i < CW; i += 50) for (let j = GROUND_Y; j < CH; j += 20) { ctx.fillStyle = ((i / 50 + j / 20) % 2 === 0) ? '#2b9348' : '#007f5f'; ctx.fillRect(i, j, 50, 20); }
-        ctx.strokeStyle = '#fff'; ctx.fillStyle = '#fff'; ctx.lineWidth = 4;
-        ctx.fillRect(0, GROUND_Y, CW, 6); ctx.fillRect(CW / 2 - 3, GROUND_Y, 6, stripH);
-        ctx.beginPath(); ctx.ellipse(CW / 2, mid, 90, stripH / 2 - 6, 0, 0, 7); ctx.stroke();
-        for (let s = 0; s < 2; s++) {
-            const gx = s ? CW - GOAL_W : GOAL_W, ax = s ? gx - 230 : gx + 230;
-            ctx.fillRect(gx - 2, GROUND_Y, 4, stripH);                                   // línea de gol
-            ctx.strokeRect(Math.min(gx, ax), GROUND_Y + 8, 230, stripH - 16);            // área grande
-            ctx.beginPath(); ctx.arc(s ? gx - 130 : gx + 130, mid, 5, 0, 7); ctx.fill(); // punto penal
+    function rr(x, y, w, h, r, c = ctx) {
+        c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+    }
+    let bg = null;
+    if (document.fonts) document.fonts.ready.then(() => { bg = null; });
+    function buildBg() {
+        bg = document.createElement('canvas'); bg.width = CW; bg.height = CH; const c = bg.getContext('2d');
+        let g = c.createLinearGradient(0, 0, 0, 460); g.addColorStop(0, '#0d0726'); g.addColorStop(0.3, '#1c1050'); g.addColorStop(1, '#3a2272');
+        c.fillStyle = g; c.fillRect(0, 0, CW, 460);
+        for (let i = 0; i < 11; i++) { c.fillStyle = i % 2 ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.04)'; c.fillRect(0, 172 + i * 25, CW, 25); }
+        c.fillStyle = '#0a0618'; c.fillRect(0, 0, CW, 34); c.fillStyle = '#1a1240'; c.fillRect(0, 34, CW, 6);
+        for (const lx of [160, 560, 960, 1340, 1740]) {
+            const b2 = c.createLinearGradient(0, 40, 0, 450); b2.addColorStop(0, 'rgba(255,255,235,0.22)'); b2.addColorStop(1, 'rgba(255,255,235,0)');
+            c.fillStyle = b2; c.beginPath(); c.moveTo(lx - 16, 44); c.lineTo(lx + 16, 44); c.lineTo(lx + 200, 450); c.lineTo(lx - 120, 450); c.closePath(); c.fill();
+            const rg = c.createRadialGradient(lx, 44, 2, lx, 44, 70); rg.addColorStop(0, '#fff'); rg.addColorStop(0.25, 'rgba(255,255,255,0.6)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+            c.fillStyle = rg; c.fillRect(lx - 70, 0, 140, 120); c.fillStyle = '#fff'; c.fillRect(lx - 26, 38, 52, 8);
+        }
+        c.fillStyle = '#cfd8ff'; c.fillRect(0, 448, CW, 4);
+        g = c.createLinearGradient(0, 452, 0, 498); g.addColorStop(0, '#2a8ee8'); g.addColorStop(1, '#0d4f94'); c.fillStyle = g; c.fillRect(0, 452, CW, 46);
+        c.fillStyle = 'rgba(255,255,255,0.18)'; for (let x = 0; x < CW; x += 140) { c.beginPath(); c.moveTo(x + 30, 452); c.lineTo(x + 70, 452); c.lineTo(x + 40, 498); c.lineTo(x, 498); c.fill(); }
+        c.fillStyle = '#fff'; c.font = '14px "Press Start 2P", monospace'; c.textAlign = 'center'; for (let x = 130; x < CW; x += 300) c.fillText('CABEZONES', x, 482);
+        c.fillStyle = '#0a0618'; c.fillRect(0, 498, CW, 5);
+        for (let x = 0, i = 0; x < CW; x += 100, i++) { c.fillStyle = i % 2 ? '#2e9b3f' : '#37ab49'; c.fillRect(x, 503, 100, 165); }
+        g = c.createLinearGradient(0, 503, 0, 668); g.addColorStop(0, 'rgba(0,0,0,0.28)'); g.addColorStop(0.5, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(255,255,255,0.06)'); c.fillStyle = g; c.fillRect(0, 503, CW, 165);
+        c.fillStyle = '#1f0c12'; c.fillRect(0, 668, CW, 32); c.fillStyle = '#2e1118'; for (let x = 20; x < CW; x += 140) c.fillRect(x, 682, 50, 10);
+        c.strokeStyle = '#fff'; c.fillStyle = '#fff'; c.lineWidth = 4;
+        c.strokeRect(GOAL_W, 522, CW - 2 * GOAL_W, 134);
+        c.beginPath(); c.moveTo(CW / 2, 522); c.lineTo(CW / 2, 656); c.stroke();
+        c.beginPath(); c.ellipse(CW / 2, 589, 120, 44, 0, 0, 7); c.stroke(); c.beginPath(); c.arc(CW / 2, 589, 5, 0, 7); c.fill();
+        for (const sd of [0, 1]) {
+            const gx = sd ? CW - GOAL_W : GOAL_W, dr = sd ? -1 : 1;
+            c.strokeRect(Math.min(gx, gx + dr * 260), 538, 260, 102); c.strokeRect(Math.min(gx, gx + dr * 100), 566, 100, 46);
+            c.beginPath(); c.arc(gx + dr * 170, 589, 5, 0, 7); c.fill();
         }
     }
+    function drawField(t) {
+        if (!bg) buildBg();
+        ctx.drawImage(bg, 0, 0);
+        const cheer = gameState === 'GOAL_PAUSE';
+        crowd.forEach(h => {
+            const j = Math.abs(Math.sin(t * h.js)) * (cheer ? 22 : 10), s = h.s;
+            ctx.fillStyle = h.c; ctx.fillRect(h.x, h.y - j, s * 1.3, s * 1.2);
+            ctx.fillStyle = h.sk; ctx.fillRect(h.x + s * 0.1, h.y - j - s, s * 1.1, s);
+            if (cheer) { ctx.fillRect(h.x - 2, h.y - j - s * 1.8, 3, s); ctx.fillRect(h.x + s * 1.3 - 1, h.y - j - s * 1.8, 3, s); }
+        });
+    }
+    function timeText() { return suddenDeath ? 'GOL ORO' : `${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`; }
+    function drawScoreboard() {
+        const w = 560, h = 118, x = CW / 2 - w / 2;
+        ctx.strokeStyle = '#222'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x + 70, 0); ctx.lineTo(x + 70, 12); ctx.moveTo(x + w - 70, 0); ctx.lineTo(x + w - 70, 12); ctx.stroke();
+        rr(x, 10, w, h, 14); ctx.fillStyle = '#1b1f2a'; ctx.fill(); ctx.strokeStyle = '#4a5068'; ctx.lineWidth = 4; ctx.stroke();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        fit(player1.data.nickname, 12, 150); ctx.fillStyle = '#48cae4'; ctx.fillText(player1.data.nickname, x + 105, 38);
+        fit(player2.data.nickname, 12, 150); ctx.fillStyle = '#f72585'; ctx.fillText(player2.data.nickname, x + w - 105, 38);
+        [[x + 60, p1Score], [x + w - 150, p2Score]].forEach(([bx, sc]) => {
+            rr(bx, 50, 90, 62, 8); ctx.fillStyle = '#0b2e13'; ctx.fill(); ctx.strokeStyle = '#7CFC00'; ctx.lineWidth = 3; ctx.stroke();
+            ctx.font = '40px "Press Start 2P"'; ctx.fillStyle = '#9dff4a'; ctx.fillText(sc, bx + 45, 100);
+        });
+        ctx.save(); ctx.shadowColor = '#fff'; ctx.shadowBlur = 12; ctx.fillStyle = '#fff'; fit(timeText(), 34, 220); ctx.fillText(timeText(), CW / 2, 98); ctx.restore();
+    }
+    function togglePause() {
+        if (gameState === 'PAUSED') { gameState = prePause; uiPause.classList.add('hidden'); acc = 0; lastT = performance.now(); }
+        else if (gameState === 'PLAYING' || gameState === 'GOAL_PAUSE') { prePause = gameState; gameState = 'PAUSED'; uiPause.classList.remove('hidden'); for (const k in keys) keys[k] = false; }
+    }
+    let prePause = 'PLAYING';
     function drawGoals() {
         for (let s = 0; s < 2; s++) {
             const h = goalH[s], x0 = s ? CW - GOAL_W : 0, top = GROUND_Y - h;
-            ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(x0, top, GOAL_W, h);
+            ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(x0, top, GOAL_W, h); ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(x0, 548, GOAL_W, GROUND_Y + 8 - 548);
             ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5; ctx.beginPath();
             for (let i = 0; i <= GOAL_W; i += 15) { ctx.moveTo(x0 + i, top); ctx.lineTo(x0 + i, GROUND_Y); }
             for (let j = 0; j <= h; j += 15) { ctx.moveTo(x0, top + j); ctx.lineTo(x0 + GOAL_W, top + j); }
@@ -678,18 +718,18 @@
         while (ctx.measureText(txt).width > maxW && px > 12) { px -= 2; ctx.font = `${px}px "Press Start 2P"`; }
     }
     function render(t) {
-        drawField(t); drawGoals();
+        drawField(t); drawGoals(); drawScoreboard();
         if (powerupBox.active) powerupBox.draw();
         player1.draw(); player2.draw(); ball.draw();
         ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
         if (activePowerup) {
             ctx.fillStyle = '#fff'; ctx.font = '14px "Press Start 2P"';
-            ctx.fillText(`${PU_TYPES[activePowerup.type][0]}  ${Math.ceil(activePowerup.timer / 60)}s`, CW / 2, 110);
+            ctx.fillText(`${PU_TYPES[activePowerup.type][0]}  ${Math.ceil(activePowerup.timer / 60)}s`, CW / 2, 160);
         }
         if (banner.timer > 0 && gameState === 'PLAYING') {
             ctx.save(); ctx.globalAlpha = Math.min(1, banner.timer / 30);
             fit(banner.text, 22, CW - 200); ctx.shadowColor = '#000'; ctx.shadowBlur = 8; ctx.fillStyle = banner.color;
-            ctx.fillText(banner.text, CW / 2, 160); ctx.restore();
+            ctx.fillText(banner.text, CW / 2, 205); ctx.restore();
         }
         if (gameState === 'GOAL_PAUSE') {
             ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, CW, CH);
@@ -704,6 +744,7 @@
     function frame(t) {
         requestAnimationFrame(frame);
         const dt = Math.min(t - lastT, 100); lastT = t;
+        if (gameState === 'PAUSED') { render(t); return; }
         if (gameState === 'MENU' || gameState === 'SELECT' || gameState === 'GAMEOVER') return;
         acc += dt; while (acc >= STEP) { acc -= STEP; step(); }
         render(t);
@@ -728,6 +769,7 @@
 
     function goToMenu() {
         gameState = 'MENU';
+        uiPause.classList.add('hidden');
         uiMenu.classList.remove('hidden');
         uiSelect.classList.add('hidden');
         uiGameover.classList.add('hidden');

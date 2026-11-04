@@ -208,10 +208,10 @@
         .cr-c b { display: block; font-size: 9px; color: #ffd166; } .cr-c small { display: block; font-size: 7px; color: #9ca3af; margin-top: 3px; }
         #touch { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
         .tg { position: fixed; bottom: 14px; display: flex; gap: 12px; pointer-events: none; }
-        .tg.l { left: 14px; } .tg.l2 { left: 222px; } .tg.r { right: 14px; } .tg.r2 { right: 222px; }
+        .tg.l { left: 14px; } .tg.l2 { left: 190px; } .tg.r { right: 14px; } .tg.r2 { right: 190px; }
         #touch.solo .l2 { left: auto; right: 14px; } #touch.solo .p2 { display: none; }
         .tb { pointer-events: auto; touch-action: none; width: clamp(54px, 12vmin, 88px); height: clamp(54px, 12vmin, 88px); border-radius: 50%; border: 4px solid #90e0ef; background: rgba(17,138,178,.55); color: #fff; font-size: 22px; }
-        .tb.sup { background: rgba(255,209,102,.65); border-color: #ffd166; } .tb.big { background: rgba(247,37,133,.6); border-color: #ff99c8; } .tb:active { transform: scale(.92); filter: brightness(1.4); }
+        .tb.big { background: rgba(247,37,133,.6); border-color: #ff99c8; } .tb:active { transform: scale(.92); filter: brightness(1.4); }
     </style>
 </head>
 <body>
@@ -247,14 +247,14 @@
             <div>
                 <p class="text-cyan-400 mb-2">JUGADOR 1</p>
                 <p>Mover: A / D &nbsp; Saltar: W</p>
-                <p class="text-yellow-300 mt-1">Patear: F &nbsp; SÚPER: G</p>
+                <p class="text-yellow-300 mt-1">Patear: F &nbsp;(mantené = SÚPER)</p>
             </div>
             <div>
                 <p class="text-pink-400 mb-2">JUGADOR 2</p>
                 <p>Mover: ◄ / ► &nbsp; Saltar: ▲</p>
-                <p class="text-yellow-300 mt-1">Patear: ENTER &nbsp; SÚPER: . (punto)</p>
+                <p class="text-yellow-300 mt-1">Patear: ENTER o . &nbsp;(mantené = SÚPER)</p>
             </div>
-            <p class="col-span-2 text-gray-400">El SÚPER se carga solo (barra bajo el nombre) · Contra la CPU podés usar cualquiera de los dos juegos de teclas · Pausa: P / ESC</p>
+            <p class="col-span-2 text-gray-400">Contra la CPU podés usar cualquiera de los dos juegos de teclas · Pausa: P / ESC</p>
         </div>
     </div>
 
@@ -438,7 +438,7 @@
             this.startX = x; this.x = x; this.y = GROUND_Y - PLAYER_RADIUS; this.vx = 0; this.vy = 0;
             this.radius = PLAYER_RADIUS; this.isP1 = isP1; this.isCPU = isCPU; this.data = data;
             this.facing = isP1 ? 1 : -1; this.kickAnimTimer = 0; this.kickCooldown = 0; this.chargeTimer = 0;
-            this.grounded = true; this.frozen = false; this.jumpForce = BASE_JUMP_FORCE; this.moveSpeed = this.baseSpeed = MOVE_SPEED; this.meter = 40; this.prevKick = this.prevSup = false;
+            this.grounded = true; this.frozen = false; this.jumpForce = BASE_JUMP_FORCE; this.moveSpeed = this.baseSpeed = MOVE_SPEED; this.cpuTarget = 12;
         }
         resetPos() {
             this.x = this.startX; this.y = GROUND_Y - this.radius; this.vx = this.vy = 0;
@@ -454,21 +454,21 @@
             return false;
         }
         getInputs() {
-            if (this.frozen) return { left: false, right: false, jump: false, kick: false, sup: false };
+            if (this.frozen) return { left: false, right: false, jump: false, kickHold: false };
             if (!this.isCPU) {
                 const any = a => a.some(c => keys[c]);
-                const s1 = { left: any(['KeyA']), right: any(['KeyD']), jump: any(['KeyW']), kick: any(['KeyF', 'Space']), sup: any(['KeyG', 'KeyH']) };
-                const s2 = { left: any(['ArrowLeft']), right: any(['ArrowRight']), jump: any(['ArrowUp']), kick: any(['Enter', 'NumpadEnter', 'Numpad0', 'ShiftRight']), sup: any(['Period', 'Slash', 'NumpadDecimal', 'Comma']) };
+                const s1 = { left: any(['KeyA']), right: any(['KeyD']), jump: any(['KeyW']), kickHold: any(['KeyF', 'KeyG', 'Space']) };
+                const s2 = { left: any(['ArrowLeft']), right: any(['ArrowRight']), jump: any(['ArrowUp']), kickHold: any(['Enter', 'NumpadEnter', 'Numpad0', 'Period', 'Slash', 'ShiftRight']) };
                 if (!this.isP1) return s2;
-                return currentMode === 'CPU' ? { left: s1.left || s2.left, right: s1.right || s2.right, jump: s1.jump || s2.jump, kick: s1.kick || s2.kick, sup: s1.sup || s2.sup } : s1;
+                return currentMode === 'CPU' ? { left: s1.left || s2.left, right: s1.right || s2.right, jump: s1.jump || s2.jump, kickHold: s1.kickHold || s2.kickHold } : s1;
             }
-            const i = { left: false, right: false, jump: false, kick: false, sup: false };
+            const i = { left: false, right: false, jump: false, kickHold: false };
             const L = this.lvl === undefined ? 1 : this.lvl;
             if (!this.thinkT || --this.thinkT <= 0) { this.thinkT = [16, 8, 3][L]; this.noise = rnd(-1, 1) * [90, 40, 8][L]; }
             const atk = this.isP1 ? 1 : -1, dx = (ball.x + this.noise - atk * 48) - this.x; // se ubica detrás de la pelota
             if (dx < -14) i.left = true; else if (dx > 14) i.right = true; else this.facing = atk;
             if (ball.y - this.y < -60 && Math.abs(ball.x - this.x) < [110, 150, 190][L]) i.jump = true;
-            if (this.facing === atk && this.canReach() && Math.random() < [0.1, 0.3, 0.6][L]) { if (this.meter >= 100 && Math.random() < [0.2, 0.5, 0.8][L]) i.sup = true; else i.kick = true; }
+            if (this.facing === atk && this.canReach()) i.kickHold = this.chargeTimer < this.cpuTarget;
             return i;
         }
         update() {
@@ -479,12 +479,12 @@
                 if (inp.right) { this.vx += 1.5; this.facing = 1; mv = true; }
                 this.vx = Math.max(-this.moveSpeed, Math.min(this.moveSpeed, this.vx));
                 if (inp.jump && this.grounded) { this.vy = -this.jumpForce; this.grounded = false; }
-                if (inp.kick && !this.prevKick) this.executeKick(false);                       // patada: al apretar
-                if (inp.sup && !this.prevSup) { if (this.meter >= 100) this.executeKick(true); else sfx('bounce'); }  // súper: solo si la barra está llena
-            }
-            this.prevKick = inp.kick; this.prevSup = inp.sup;
-            if (!this.frozen && this.meter < 100) { this.meter = Math.min(100, this.meter + 100 / 600); if (this.meter >= 100 && !this.isCPU) { sfx('pu'); burst(this.x, this.y, '#ff006e', 14, 6); } }
-            this.chargeTimer = this.meter >= 100 ? MAX_CHARGE : Math.min(this.meter, 99) * 0.4;
+                if (inp.kickHold) { if (this.chargeTimer < MAX_CHARGE) this.chargeTimer++; }
+                else if (this.chargeTimer > 0) {
+                    this.executeKick(this.chargeTimer >= SUPER_CHARGE); this.chargeTimer = 0;
+                    this.cpuTarget = Math.random() < [0.05, 0.18, 0.3][this.lvl === undefined ? 1 : this.lvl] ? SUPER_CHARGE + 3 : pick([3, 8, 15, 30]);
+                }
+            } else this.chargeTimer = 0;
             if (!mv) this.vx *= FRICTION;
             this.vy += GRAVITY * gravityMul; this.x += this.vx; this.y += this.vy; this.grounded = false;
             if (this.y + this.radius >= GROUND_Y) { this.y = GROUND_Y - this.radius; this.vy = 0; this.grounded = true; }
@@ -504,7 +504,7 @@
             ball.vx = this.facing * Math.cos(ang) * spd + this.vx * 0.3;
             ball.vy = -Math.sin(ang) * spd + this.vy * 0.2;
             ball.superType = v; ball.curveDir = Math.random() < 0.5 ? -1 : 1; ball.viaBar = false;
-            touch(this); stats[this.isP1 ? 0 : 1].k++; if (sup) { stats[this.isP1 ? 0 : 1].s++; this.meter = 0; } else this.meter = Math.min(100, this.meter + 8); sfx(sup ? 'super' : 'kick'); burst(ball.x, ball.y, sup ? v.col : '#ffffff', sup ? 22 : 7, sup ? 7 : 4); if (sup) shake = 14;
+            touch(this); stats[this.isP1 ? 0 : 1].k++; if (sup) stats[this.isP1 ? 0 : 1].s++; sfx(sup ? 'super' : 'kick'); burst(ball.x, ball.y, sup ? v.col : '#ffffff', sup ? 22 : 7, sup ? 7 : 4); if (sup) shake = 14;
         }
         draw() {
             const R = this.radius, k = R / 38, wx = this.x, wy = this.y, r = 38, f = this.facing, d = this.data, x = 0, y = 0, st = d.style, hi = headImg(d), sc = hi ? Math.min(92 / hi.naturalHeight, 88 / hi.naturalWidth) * (d.headScale || 1) : 1, up = hi ? Math.max(0, hi.naturalHeight * sc - 76) + 12 : 0;
@@ -553,7 +553,7 @@
             }
             if (st === 'visor') { ctx.fillStyle = 'rgba(0,245,212,0.55)'; ctx.fillRect(x - r + 4, y - 15, r * 2 - 8, 20); ctx.strokeRect(x - r + 4, y - 15, r * 2 - 8, 20); ctx.fillStyle = '#000'; ctx.fillRect(x + f * 12, y - r - 10, 3, 12); }
             ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(x + f * 36 - (f < 0 ? 6 : 0), y - 2, 6, 9);
-            const mx = x + f * 18, open = this.kickAnimTimer > 0 || this.chargeTimer >= SUPER_CHARGE;
+            const mx = x + f * 18, open = this.kickAnimTimer > 0 || this.chargeTimer > 20;
             rr(mx - 11, y + 9, 22, open ? 16 : 10, 3); ctx.fillStyle = open ? '#000' : '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
             if (st === 'lollipop') { ctx.beginPath(); ctx.moveTo(mx + f * 6, y + 15); ctx.lineTo(mx + f * 24, y + 3); ctx.stroke(); ctx.fillStyle = d.stripeColor; ctx.beginPath(); ctx.arc(mx + f * 26, y + 1, 12, 0, 7); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(mx + f * 26, y + 1, 6, 0, 7); ctx.fill(); }
             if (st === 'mate') { ctx.fillStyle = '#7f5539'; rr(x + f * (r - 4) - (f < 0 ? 16 : 0), y + 12, 16, 20, 4); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#3a5a40'; ctx.fillRect(x + f * (r - 4) - (f < 0 ? 16 : 0) + 2, y + 12, 12, 4); }
@@ -612,21 +612,33 @@
             }
         }
         draw() {
-            const r = this.radius, st = this.superType;
-            const h = Math.max(0, GROUND_Y - (this.y + r));
+            const r = this.radius, st = this.superType, h = Math.max(0, GROUND_Y - (this.y + r));
             ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(this.x, GROUND_Y + 6, r * Math.max(0.35, 1 - h / 600), 6, 0, 0, 7); ctx.fill();
             ctx.save(); ctx.translate(this.x, this.y);
-            if (st) {
-                ctx.fillStyle = st.col + '66';
-                ctx.beginPath(); ctx.arc(-this.vx * 0.6, -this.vy * 0.6, r * 1.2, 0, 7); ctx.fill();
-                ctx.beginPath(); ctx.arc(-this.vx * 0.3, -this.vy * 0.3, r * 1.1, 0, 7); ctx.fill();
+            if (st) {   // estela de color del súper tiro
+                for (let k = 3; k >= 1; k--) { ctx.fillStyle = st.col + (k === 3 ? '33' : k === 2 ? '55' : '88'); ctx.beginPath(); ctx.arc(-this.vx * 0.28 * k, -this.vy * 0.28 * k, r * (1.35 - k * 0.1), 0, 7); ctx.fill(); }
+                ctx.shadowColor = st.col; ctx.shadowBlur = 24;
             }
-            ctx.rotate(this.angle);
-            ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fillStyle = st ? st.col : '#fff'; ctx.fill();
-            ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.stroke();
-            ctx.fillStyle = st ? '#ffb703' : '#000';
-            ctx.beginPath(); ctx.arc(0, 0, r * 0.38, 0, 7); ctx.fill();
-            for (let k = 0; k < 5; k++) { const a = k * 1.2566; ctx.beginPath(); ctx.arc(Math.cos(a) * r * 0.8, Math.sin(a) * r * 0.8, r * 0.16, 0, 7); ctx.fill(); }
+            const base = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
+            base.addColorStop(0, '#ffffff'); base.addColorStop(0.6, st ? '#fff4e0' : '#f2f4f8'); base.addColorStop(1, st ? '#e8b36b' : '#aeb6c4');
+            ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fillStyle = base; ctx.fill(); ctx.shadowBlur = 0;
+            // parches y costuras (giran con la pelota)
+            ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.clip(); ctx.rotate(this.angle);
+            const pc = st ? st.col : '#1b1f2a', pent = (cx, cy, rad, rot) => { ctx.beginPath(); for (let k = 0; k < 5; k++) { const a = rot + k * 1.2566; ctx.lineTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad); } ctx.closePath(); ctx.fill(); };
+            ctx.strokeStyle = 'rgba(27,31,42,0.55)'; ctx.lineWidth = Math.max(1.5, r * 0.07); ctx.lineCap = 'round'; ctx.beginPath();
+            for (let k = 0; k < 5; k++) {
+                const v = -1.5708 + k * 1.2566, e = v + 0.6283, ex = Math.cos(e) * r * 0.98, ey = Math.sin(e) * r * 0.98;
+                ctx.moveTo(Math.cos(v) * r * 0.36, Math.sin(v) * r * 0.36); ctx.lineTo(Math.cos(v) * r * 0.68, Math.sin(v) * r * 0.68);
+                ctx.lineTo(Math.cos(v + 0.6283) * r * 0.86, Math.sin(v + 0.6283) * r * 0.86); ctx.moveTo(Math.cos(v) * r * 0.68, Math.sin(v) * r * 0.68); ctx.lineTo(Math.cos(v - 0.6283) * r * 0.86, Math.sin(v - 0.6283) * r * 0.86);
+            }
+            ctx.stroke(); ctx.fillStyle = pc; pent(0, 0, r * 0.37, -1.5708);
+            for (let k = 0; k < 5; k++) { const e = -1.5708 + k * 1.2566 + 0.6283; pent(Math.cos(e) * r * 1.0, Math.sin(e) * r * 1.0, r * 0.36, e + 3.1416); }
+            ctx.restore();
+            // sombreado de esfera y brillo
+            const sh = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.25, 0, 0, r * 1.02); sh.addColorStop(0, 'rgba(255,255,255,0)'); sh.addColorStop(0.65, 'rgba(0,0,0,0.04)'); sh.addColorStop(1, 'rgba(0,0,0,0.4)');
+            ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fillStyle = sh; ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.ellipse(-r * 0.4, -r * 0.44, r * 0.22, r * 0.12, -0.75, 0, 7); ctx.fill();
+            ctx.lineWidth = Math.max(2, r * 0.1); ctx.strokeStyle = '#0b0d12'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke();
             ctx.restore();
         }
     }
@@ -648,9 +660,26 @@
         if (d >= min || d === 0) return;
         const nx = dx / d, ny = dy / d, o = (min - d) / 2;
         a.x -= nx * o; a.y -= ny * o; b.x += nx * o; b.y += ny * o;
-        const rel = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
-        if (rel < 0) { const j = -1.1 * rel / 2; b.vx += j * nx; b.vy += j * ny; a.vx -= j * nx; a.vy -= j * ny; }
-        if (ny > 0.6) a.grounded = true; else if (ny < -0.6) b.grounded = true;
+        if (Math.abs(ny) > 0.6) {                      // uno arriba del otro: rebote vertical
+            const rel = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+            if (rel < 0) { const j = -1.1 * rel / 2; b.vx += j * nx; b.vy += j * ny; a.vx -= j * nx; a.vy -= j * ny; }
+            if (ny > 0.6) a.grounded = true; else b.grounded = true;
+        } else if ((a.vx - b.vx) * Math.sign(nx) > 0) { // lado a lado: choque parejo, el que llega primero no arrastra al otro
+            const avg = (a.vx + b.vx) / 2; a.vx = b.vx = avg * 0.3;
+        }
+    }
+    // Si la pelota queda aplastada entre los dos jugadores, sale disparada hacia arriba (no se traba ni se arrastra hasta el arco)
+    let sqCd = 0;
+    function sandwich() {
+        if (sqCd > 0) { sqCd--; return; }
+        const b = ball, d1 = Math.hypot(b.x - player1.x, b.y - player1.y), d2 = Math.hypot(b.x - player2.x, b.y - player2.y);
+        if (d1 > player1.radius + b.radius + 6 || d2 > player2.radius + b.radius + 6) return;
+        if ((b.x - player1.x) * (b.x - player2.x) >= 0) return;          // no está entre los dos
+        sqCd = 24; b.superType = null; b.viaBar = false;
+        b.vy = -rnd(11, 14); b.vx = rnd(-1.5, 1.5) + (player1.vx + player2.vx) * 0.15; b.y -= 6;
+        const dir = Math.sign(player2.x - player1.x) || 1;
+        player1.vx = -dir * 3; player2.vx = dir * 3; player1.x -= dir * 4; player2.x += dir * 4;
+        burst(b.x, b.y, '#ffffff', 10, 4); sfx('bounce');
     }
 
     function endPowerup() {
@@ -751,7 +780,7 @@
             }
             updateScoreUI();
         }
-        player1.update(); player2.update(); pushPlayers(player1, player2); ball.update();
+        player1.update(); player2.update(); pushPlayers(player1, player2); ball.update(); sandwich();
         if (powerupBox.active) {
             powerupBox.update();
             let who = null;
@@ -1054,7 +1083,7 @@
         showInfo(`<h2 class="text-2xl text-yellow-300 mb-6 text-center">AJUSTES</h2>${row('MÚSICA', !musicOff, 'toggleMusic()')}${row('SONIDO (EFECTOS)', !sfxOff, 'toggleSfx()')}${row('CONTROLES TÁCTILES', touchOn, 'toggleTouch()')}<p class="text-xs text-gray-400 mb-4 text-center">También podés silenciar en cualquier momento<br>con los botones de arriba a la derecha.</p><button class="${BTN}" onclick="goToMenu()">VOLVER</button>`);
     }
     const TB = (code, t, cls = '') => `<button class="tb ${cls}" data-k="${code}">${t}</button>`;
-    touchEl.innerHTML = `<div class="tg l">${TB('KeyA', '◄')}${TB('KeyD', '►')}</div><div class="tg l2">${TB('KeyW', '▲')}${TB('KeyF', '⚽', 'big')}${TB('KeyG', '★', 'sup')}</div><div class="tg r p2">${TB('ArrowLeft', '◄')}${TB('ArrowRight', '►')}</div><div class="tg r2 p2">${TB('ArrowUp', '▲')}${TB('Enter', '⚽', 'big')}${TB('Period', '★', 'sup')}</div>`;
+    touchEl.innerHTML = `<div class="tg l">${TB('KeyA', '◄')}${TB('KeyD', '►')}</div><div class="tg l2">${TB('KeyW', '▲')}${TB('KeyF', '⚽', 'big')}</div><div class="tg r p2">${TB('ArrowLeft', '◄')}${TB('ArrowRight', '►')}</div><div class="tg r2 p2">${TB('ArrowUp', '▲')}${TB('Enter', '⚽', 'big')}</div>`;
     touchEl.querySelectorAll('.tb').forEach(b => { const k = b.dataset.k, on = e => { e.preventDefault(); keys[k] = true; }, off = e => { e.preventDefault(); keys[k] = false; };
         b.addEventListener('pointerdown', on); ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => b.addEventListener(ev, off)); });
     touchEl.addEventListener('contextmenu', e => e.preventDefault());
